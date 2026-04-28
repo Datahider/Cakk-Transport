@@ -1,0 +1,66 @@
+{
+    "_readme": [
+        "This file locks the dependencies of your project to a known state",
+        "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
+        "This file is @generated automatically"
+    ],
+    "content-hash": "bc89f02efa85e35d395344b4519d73f7",
+    "packages": [
+        {
+            "name": "losthost/db",
+            "version": "dev-main",
+            "dist": {
+                "type": "path",
+                "url": "../Oberbot/vendor/losthost/db",
+                "reference": "6253808002c17779dcfd62a0d8d0322b99319259"
+            },
+            "require": {
+                "php": "^8.1.1"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "10.4.2"
+            },
+            "type": "class",
+            "autoload": {
+                "psr-4": {
+                    "losthost\\DB\\test\\": "test",
+                    "losthost\\DB\\": "src"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Peter Ioannidis",
+                    "email": "pio@pio.su",
+                    "homepage": "https://i.pio.su",
+                    "role": "Ideologist"
+                }
+            ],
+            "description": "Database access with so called DB Objects (descendants of class DBObject)",
+            "homepage": "https://github.com/datahider/DB",
+            "keywords": [
+                "database",
+                "db"
+            ],
+            "transport-options": {
+                "symlink": false,
+                "relative": true
+            }
+        }
+    ],
+    "packages-dev": [],
+    "aliases": [],
+    "minimum-stability": "dev",
+    "stability-flags": {
+        "losthost/db": 20
+    },
+    "prefer-stable": true,
+    "prefer-lowest": false,
+    "platform": {
+        "php": "^8.3"
+    },
+    "platform-dev": [],
+    "plugin-api-version": "2.6.0"
+}
