@@ -331,14 +331,16 @@ final class App
     private function login(): array
     {
         $payload = $this->readJsonBody();
-        $actorId = trim((string) ($payload['agent_id'] ?? ''));
+        $actorIdRaw = trim((string) ($payload['agent_id'] ?? ''));
         $password = (string) ($payload['password'] ?? '');
-        if ($actorId === '' || $password === '') {
+        if ($actorIdRaw === '' || $password === '') {
             $this->error(422, 'agent_id and password are required');
         }
 
+        $actorId = $this->requiredPositiveIntString($actorIdRaw, 'agent_id');
+
         try {
-            $actor = new Agent(['id' => $this->requiredPositiveIntString($actorId, 'agent_id')]);
+            $actor = new Agent(['id' => $actorId]);
         } catch (Exception $error) {
             $this->error(401, 'Invalid credentials');
         }
@@ -1431,8 +1433,10 @@ final class App
 
     private function loadSessionForAgent(Agent $actor, string $sessionPublicId): AgentSession
     {
+        $sessionId = $this->requiredPositiveIntString($sessionPublicId, 'session_id');
+
         try {
-            $session = new AgentSession(['id' => $this->requiredPositiveIntString($sessionPublicId, 'session_id')]);
+            $session = new AgentSession(['id' => $sessionId]);
         } catch (Exception $error) {
             $this->error(404, 'Session not found');
         }
@@ -1456,8 +1460,10 @@ final class App
 
     private function loadRouteForMember(Agent $actor, string $routePublicId): Route
     {
+        $routeId = $this->requiredPositiveIntString($routePublicId, 'route_id');
+
         try {
-            $route = new Route(['id' => $this->requiredPositiveIntString($routePublicId, 'route_id')]);
+            $route = new Route(['id' => $routeId]);
         } catch (Exception $error) {
             $this->error(404, 'Route not found');
         }
@@ -1490,8 +1496,10 @@ final class App
 
     private function loadLaneForMember(Agent $actor, string $lanePublicId): Lane
     {
+        $laneId = $this->requiredPositiveIntString($lanePublicId, 'lane_id');
+
         try {
-            $lane = new Lane(['id' => $this->requiredPositiveIntString($lanePublicId, 'lane_id')]);
+            $lane = new Lane(['id' => $laneId]);
         } catch (Exception $error) {
             $this->error(404, 'Lane not found');
         }
@@ -1504,8 +1512,10 @@ final class App
 
     private function loadReadablePayload(Agent $actor, string $payloadId): Payload
     {
+        $payloadIdInt = $this->requiredPositiveIntString($payloadId, 'payload_id');
+
         try {
-            $payload = new Payload(['id' => (int) $payloadId]);
+            $payload = new Payload(['id' => $payloadIdInt]);
         } catch (Exception $error) {
             $this->error(404, 'Payload not found');
         }
@@ -1729,8 +1739,10 @@ final class App
 
     private function loadReadablePayloadMeta(Agent $actor, string $payloadMetaId): PayloadMeta
     {
+        $payloadMetaIdInt = $this->requiredPositiveIntString($payloadMetaId, 'payload_meta_id');
+
         try {
-            $payloadMeta = new PayloadMeta(['id' => (int) $payloadMetaId]);
+            $payloadMeta = new PayloadMeta(['id' => $payloadMetaIdInt]);
         } catch (Exception $error) {
             $this->error(404, 'Payload meta not found');
         }
@@ -1742,8 +1754,10 @@ final class App
 
     private function loadWritablePayloadMeta(Agent $actor, string $payloadMetaId): PayloadMeta
     {
+        $payloadMetaIdInt = $this->requiredPositiveIntString($payloadMetaId, 'payload_meta_id');
+
         try {
-            $payloadMeta = new PayloadMeta(['id' => (int) $payloadMetaId]);
+            $payloadMeta = new PayloadMeta(['id' => $payloadMetaIdInt]);
         } catch (Exception $error) {
             $this->error(404, 'Payload meta not found');
         }
