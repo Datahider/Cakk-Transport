@@ -1924,7 +1924,7 @@ final class App
             'updated_at' => $this->formatDateTime($session->updated_at),
             'last_seen_at' => $this->formatDateTime($session->last_seen_at),
             'expires_at' => $this->formatDateTime($session->expires_at),
-            'revoked_at' => $this->formatDateTime($session->revoked_at),
+            'revoked_at' => $session->revoked_at !== null ? $this->formatDateTime($session->revoked_at) : null,
         ];
     }
 

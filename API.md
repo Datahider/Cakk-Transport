@@ -9,9 +9,10 @@
 ## Base
 
 - Base URL: `http://127.0.0.1:8080`
-- Все ответы JSON имеют вид:
+- Все JSON-ответы имеют вид:
   - success: `{"ok":true,...}`
   - error: `{"ok":false,"error":"..."}`
+- Исключение: `GET /payloads/{payload_id}/body` возвращает `application/octet-stream`
 - Времена сериализуются как строки формата `Y-m-d H:i:s.u`
 
 ## Auth
@@ -48,7 +49,7 @@ Session token:
 - `updated_at: string`
 - `last_seen_at: string`
 - `expires_at: string`
-- `revoked_at: string`
+- `revoked_at: ?string`
 
 `route`:
 - `route_id: int`
@@ -329,6 +330,14 @@ Response:
   "payload": { "...": "..." }
 }
 ```
+
+### `GET /payloads/{payload_id}/body`
+
+Response:
+- `Content-Type: application/octet-stream`
+- `Content-Length: <payload_size>`
+- `ETag: "<payload_sha256>"`
+- body: raw payload bytes
 
 ## Payload meta endpoints
 

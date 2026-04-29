@@ -183,6 +183,8 @@ final class AcceptanceRunner
             'device_label' => 'a-second',
         ]);
         $this->assertStatus($aSecond, 200);
+        $this->assertTrue(array_key_exists('revoked_at', $aSecond['json']['session'] ?? []), 'session includes revoked_at');
+        $this->assertSame(null, $aSecond['json']['session']['revoked_at'], 'active session revoked_at is null');
         $this->context['tokens']['a2'] = (string) $aSecond['json']['session_token'];
         $this->context['sessions']['a2'] = (int) $aSecond['json']['session']['session_id'];
 
