@@ -749,18 +749,26 @@ final class AcceptanceRunner
         ], $this->token('b'));
         $this->assertStatus($routesHead, 200);
         $this->assertLazySyncItems($routesHead, 'routes head');
+        $routeSnapshot = $this->toLazySyncSnapshot($routesHead);
 
         $routesFull = $this->json('POST', '/sync/routes/full', [
             'limit' => 50,
-            'items' => [
-                [
-                    'id' => $this->routeId('main'),
-                    'revision' => (string) ($routesHead['json']['items'][0]['revision'] ?? ''),
-                ],
-            ],
+            'items' => $routeSnapshot,
         ], $this->token('b'));
         $this->assertStatus($routesFull, 200);
-        $this->assertLazySyncItems($routesFull, 'routes full');
+        $this->assertSame([], $routesFull['json']['items'] ?? null, 'routes full skips matching revisions');
+
+        $routeMetaSync = $this->json('POST', '/routes/' . $this->routeId('main') . '/meta', [
+            'meta' => ['sync_title' => 'Main route sync'],
+        ], $this->token('a'));
+        $this->assertStatus($routeMetaSync, 200);
+
+        $routesFullChanged = $this->json('POST', '/sync/routes/full', [
+            'limit' => 50,
+            'items' => $routeSnapshot,
+        ], $this->token('b'));
+        $this->assertStatus($routesFullChanged, 200);
+        $this->assertLazySyncItems($routesFullChanged, 'routes full changed');
 
         $lanesHead = $this->json('POST', '/sync/routes/' . $this->routeId('main') . '/lanes/head', [
             'limit' => 50,
@@ -768,18 +776,26 @@ final class AcceptanceRunner
         ], $this->token('b'));
         $this->assertStatus($lanesHead, 200);
         $this->assertLazySyncItems($lanesHead, 'lanes head');
+        $laneSnapshot = $this->toLazySyncSnapshot($lanesHead);
 
         $lanesFull = $this->json('POST', '/sync/routes/' . $this->routeId('main') . '/lanes/full', [
             'limit' => 50,
-            'items' => [
-                [
-                    'id' => $this->laneId('extra'),
-                    'revision' => (string) ($lanesHead['json']['items'][0]['revision'] ?? ''),
-                ],
-            ],
+            'items' => $laneSnapshot,
         ], $this->token('b'));
         $this->assertStatus($lanesFull, 200);
-        $this->assertLazySyncItems($lanesFull, 'lanes full');
+        $this->assertSame([], $lanesFull['json']['items'] ?? null, 'lanes full skips matching revisions');
+
+        $laneMetaSync = $this->json('POST', '/lanes/' . $this->laneId('extra') . '/meta', [
+            'meta' => ['sync_lane' => 'Extra lane sync'],
+        ], $this->token('a'));
+        $this->assertStatus($laneMetaSync, 200);
+
+        $lanesFullChanged = $this->json('POST', '/sync/routes/' . $this->routeId('main') . '/lanes/full', [
+            'limit' => 50,
+            'items' => $laneSnapshot,
+        ], $this->token('b'));
+        $this->assertStatus($lanesFullChanged, 200);
+        $this->assertLazySyncItems($lanesFullChanged, 'lanes full changed');
 
         $payloadTail = $this->json('POST', '/sync/lanes/' . $this->laneId('extra') . '/payloads/tail', [
             'limit' => 100,
@@ -787,20 +803,39 @@ final class AcceptanceRunner
         ], $this->token('b'));
         $this->assertStatus($payloadTail, 200);
         $this->assertLazySyncItems($payloadTail, 'payload tail');
+        $payloadSnapshot = $this->toLazySyncSnapshot($payloadTail);
 
-        $payloadWindow = $this->json('POST', '/sync/lanes/' . $this->laneId('extra') . '/payloads/window', [
+        $payloadTailStable = $this->json('POST', '/sync/lanes/' . $this->laneId('extra') . '/payloads/tail', [
+            'limit' => 100,
+            'items' => $payloadSnapshot,
+        ], $this->token('b'));
+        $this->assertStatus($payloadTailStable, 200);
+        $this->assertSame([], $payloadTailStable['json']['items'] ?? null, 'payload tail skips matching revisions');
+
+        $payloadExtra2 = $this->raw(
+            'POST',
+            '/lanes/' . $this->laneId('extra') . '/payloads',
+            'hello from extra lane 2',
+            $this->token('a'),
+            ['Content-Type: application/octet-stream']
+        );
+        $this->assertStatus($payloadExtra2, 200);
+
+        $payloadTailChanged = $this->json('POST', '/sync/lanes/' . $this->laneId('extra') . '/payloads/tail', [
+            'limit' => 100,
+            'items' => $payloadSnapshot,
+        ], $this->token('b'));
+        $this->assertStatus($payloadTailChanged, 200);
+        $this->assertLazySyncItems($payloadTailChanged, 'payload tail changed');
+
+        $payloadWindowStable = $this->json('POST', '/sync/lanes/' . $this->laneId('extra') . '/payloads/window', [
             'anchor_payload_id' => $this->payloadId('extra1'),
             'before_limit' => 50,
             'after_limit' => 50,
-            'items' => [
-                [
-                    'id' => $this->payloadId('extra1'),
-                    'revision' => (string) ($payloadTail['json']['items'][0]['revision'] ?? ''),
-                ],
-            ],
+            'items' => $payloadSnapshot,
         ], $this->token('b'));
-        $this->assertStatus($payloadWindow, 200);
-        $this->assertLazySyncItems($payloadWindow, 'payload window');
+        $this->assertStatus($payloadWindowStable, 200);
+        $this->assertLazySyncItems($payloadWindowStable, 'payload window changed');
     }
 
     private function scenarioDestructiveOperations(): void
@@ -1031,6 +1066,32 @@ final class AcceptanceRunner
         $this->assertTrue(array_key_exists('id', $items[0] ?? []), $label . ' item contains id');
         $this->assertTrue(array_key_exists('revision', $items[0] ?? []), $label . ' item contains revision');
         $this->assertTrue(array_key_exists('is_deleted', $items[0] ?? []), $label . ' item contains is_deleted');
+    }
+
+    /**
+     * @param array{json:array<string, mixed>} $response
+     * @return list<array{id:int,revision:string}>
+     */
+    private function toLazySyncSnapshot(array $response): array
+    {
+        $items = $response['json']['items'] ?? [];
+        $snapshot = [];
+        foreach ($items as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            $id = (int) ($item['id'] ?? 0);
+            $revision = (string) ($item['revision'] ?? '');
+            if ($id <= 0 || $revision === '') {
+                continue;
+            }
+            $snapshot[] = [
+                'id' => $id,
+                'revision' => $revision,
+            ];
+        }
+
+        return $snapshot;
     }
 
     /**
