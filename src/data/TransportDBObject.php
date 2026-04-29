@@ -9,22 +9,30 @@ use losthost\DB\DBObject;
 
 abstract class TransportDBObject extends DBObject
 {
+    const NOW = 'write_moment';
+    
+    public function write($comment = '', $data = null)
+    {
+        $now = new \DateTimeImmutable();
+        
+        if ($data === null) {
+            $data = [static::NOW => $now];
+        } elseif (is_array($data)) {
+            if (empty($data[static::NOW])) {
+                $data[static::NOW] = $now;
+            }
+        } else {    
+            throw new \InvalidArgumentException('Transport write data must be an array or null.');
+        }
+
+        return parent::write($comment, $data);
+    }
+
     protected function beforeInsert($comment, $data)
     {
-        if (!isset($this->created_at) || $this->created_at === null) {
-            $this->created_at = new DateTimeImmutable();
-        }
-        $this->assertInvariants();
+        $this->created_at = $data[static::NOW];
         parent::beforeInsert($comment, $data);
     }
 
-    protected function beforeUpdate($comment, $data)
-    {
-        $this->assertInvariants();
-        parent::beforeUpdate($comment, $data);
-    }
 
-    protected function assertInvariants(): void
-    {
-    }
 }
