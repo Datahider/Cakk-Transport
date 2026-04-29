@@ -2638,8 +2638,7 @@ final class App
             return;
         }
 
-        $presence->connection_count = (int) $presence->connection_count + 1;
-        $presence->write();
+        $this->updateAgentPresenceCount($actor, $presence, (int) $presence->connection_count + 1);
     }
 
     private function markAgentOffline(Agent $actor): void
@@ -2651,8 +2650,7 @@ final class App
 
         $remaining = max(0, (int) $presence->connection_count - 1);
         if ($remaining > 0) {
-            $presence->connection_count = $remaining;
-            $presence->write();
+            $this->updateAgentPresenceCount($actor, $presence, $remaining);
             return;
         }
 
@@ -2665,6 +2663,27 @@ final class App
             $transaction->delete(TransportTransaction::OBJECT_PRESENCE, $presence);
             $transaction->updateLog('agent_offline', [TransportTransaction::OBJECT_PRESENCE], [
                 'agent_id' => (int) $actor->id,
+            ]);
+            $transaction->commit();
+        } catch (Throwable $error) {
+            $transaction->rollBack();
+            throw $error;
+        }
+    }
+
+    private function updateAgentPresenceCount(Agent $actor, AgentPresence $presence, int $connectionCount): void
+    {
+        $transaction = TransportTransaction::begin(
+            (string) $actor->zone,
+            (int) $actor->id,
+            [TransportTransaction::OBJECT_PRESENCE]
+        );
+        try {
+            $presence->connection_count = $connectionCount;
+            $transaction->write(TransportTransaction::OBJECT_PRESENCE, $presence);
+            $transaction->updateLog('agent_presence_updated', [TransportTransaction::OBJECT_PRESENCE], [
+                'agent_id' => (int) $actor->id,
+                'connection_count' => $connectionCount,
             ]);
             $transaction->commit();
         } catch (Throwable $error) {
