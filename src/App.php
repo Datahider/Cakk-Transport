@@ -697,7 +697,7 @@ final class App
                 $transaction->delete(TransportTransaction::OBJECT_SUBSCRIPTION, $subscription);
             }
 
-            $transaction->delete(TransportTransaction::OBJECT_ROUTE, $route);
+            $transaction->delete(TransportTransaction::OBJECT_ROUTE, new Route(['id' => (int) $route->id]));
             $transaction->updateLog('route_deleted', [
                 TransportTransaction::OBJECT_ROUTE,
                 TransportTransaction::OBJECT_ROUTE_META,
