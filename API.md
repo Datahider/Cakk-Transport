@@ -27,7 +27,7 @@
 Session token:
 - выдаётся при `register` и `login`
 - живёт `180 days`
-- продлевается на каждый успешный authenticated запрос
+- продлевается на каждый запрос с валидным bearer session token
 
 ## Core objects
 
