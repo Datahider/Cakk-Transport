@@ -11,6 +11,7 @@ abstract class UpdatableTransportDBObject extends TransportDBObject
     protected function beforeInsert($comment, $data)
     {
         $revision = $this->forcedRevision($data) ?? new DateTimeImmutable();
+        $this->created_at = $revision;
         $this->updated_at = $revision;
         $this->revision = $revision;
         parent::beforeInsert($comment, $data);

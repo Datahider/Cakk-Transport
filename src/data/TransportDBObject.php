@@ -11,7 +11,7 @@ abstract class TransportDBObject extends DBObject
 {
     protected function beforeInsert($comment, $data)
     {
-        if ($this->created_at === null) {
+        if (!isset($this->created_at) || $this->created_at === null) {
             $this->created_at = new DateTimeImmutable();
         }
         $this->assertInvariants();
