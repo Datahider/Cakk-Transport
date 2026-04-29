@@ -722,18 +722,26 @@ final class AcceptanceRunner
         $this->assertSame('state_patch', $streamEvent['event'], 'sse event name');
         $this->assertTrue(($streamEvent['data']['ok'] ?? false) === true, 'sse patch payload');
 
-        usleep(700000);
-        $presenceUpdates = $this->json(
-            'GET',
-            '/updates?after_id=' . $this->context['updates_after']['sys1'] . '&limit=500',
-            null,
-            $this->token('sys1')
-        );
-        $this->assertStatus($presenceUpdates, 200);
-        $kinds = array_map(
-            static fn (array $item): string => (string) $item['kind'],
-            $presenceUpdates['json']['items'] ?? []
-        );
+        $kinds = [];
+        $presenceUpdates = null;
+        for ($attempt = 0; $attempt < 40; $attempt++) {
+            usleep(500000);
+            $presenceUpdates = $this->json(
+                'GET',
+                '/updates?after_id=' . $this->context['updates_after']['sys1'] . '&limit=500',
+                null,
+                $this->token('sys1')
+            );
+            $this->assertStatus($presenceUpdates, 200);
+            $kinds = array_map(
+                static fn (array $item): string => (string) $item['kind'],
+                $presenceUpdates['json']['items'] ?? []
+            );
+            if (in_array('agent_online', $kinds, true) && in_array('agent_offline', $kinds, true)) {
+                break;
+            }
+        }
+
         $this->assertTrue(in_array('agent_online', $kinds, true), 'presence online update emitted');
         $this->assertTrue(in_array('agent_offline', $kinds, true), 'presence offline update emitted');
     }
@@ -936,11 +944,19 @@ final class AcceptanceRunner
         $headersOut = $http_response_header ?? [];
         $status = $this->parseStatusCode($headersOut);
 
+        $decoded = [];
+        if ($responseBody !== '') {
+            $maybeJson = json_decode($responseBody, true);
+            if (is_array($maybeJson)) {
+                $decoded = $maybeJson;
+            }
+        }
+
         return [
             'status' => $status,
             'headers' => $headersOut,
             'body' => $responseBody,
-            'json' => [],
+            'json' => $decoded,
         ];
     }
 
