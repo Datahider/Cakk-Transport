@@ -8,15 +8,6 @@
     "php": "^8.3",
     "losthost/db": "dev-main"
   },
-  "repositories": [
-    {
-      "type": "path",
-      "url": "../Oberbot/vendor/losthost/db",
-      "options": {
-        "symlink": false
-      }
-    }
-  ],
   "autoload": {
     "psr-4": {
       "CakkTransport\\": "src/"

@@ -614,6 +614,34 @@ final class AcceptanceRunner
         $this->assertStatus($laneView, 200);
         $this->assertSame($this->payloadId('b1'), $laneView['json']['lane']['read_state']['last_read_payload_id'] ?? null, 'lane read_state visible');
 
+        $publisherUpdateForeign = $this->raw(
+            'PUT',
+            '/payloads/' . $this->payloadId('a1') . '/body',
+            'forbidden update',
+            $this->token('b'),
+            ['Content-Type: application/octet-stream']
+        );
+        $this->assertStatus($publisherUpdateForeign, 403);
+        $this->assertSame(
+            'Agent cannot update payload owned by another agent',
+            $publisherUpdateForeign['json']['error'] ?? null,
+            'publisher cannot update foreign payload'
+        );
+
+        $authorUpdate = $this->raw(
+            'PUT',
+            '/payloads/' . $this->payloadId('a1') . '/body',
+            'hello from a, edited',
+            $this->token('a'),
+            ['Content-Type: application/octet-stream']
+        );
+        $this->assertStatus($authorUpdate, 200);
+        $this->assertTrue(($authorUpdate['json']['payload']['revision'] ?? '') !== '', 'payload update returns revision');
+
+        $editedBody = $this->raw('GET', '/payloads/' . $this->payloadId('a1') . '/body', null, $this->token('a'));
+        $this->assertStatus($editedBody, 200);
+        $this->assertSame('hello from a, edited', $editedBody['body'], 'payload body updated');
+
         $publisherDeleteForeign = $this->json('DELETE', '/payloads/' . $this->payloadId('a1'), null, $this->token('b'));
         $this->assertStatus($publisherDeleteForeign, 403);
         $this->assertSame('Agent cannot delete payload owned by another agent', $publisherDeleteForeign['json']['error'] ?? null, 'publisher cannot delete foreign payload');

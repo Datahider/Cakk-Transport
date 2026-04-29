@@ -19,7 +19,7 @@ final class UpdateLog extends DBObject
         'payload_meta_id' => 'BIGINT UNSIGNED NULL',
         'covered_json' => 'LONGTEXT NOT NULL',
         'data_json' => 'LONGTEXT NOT NULL',
-        'created_at' => 'DATETIME NOT NULL',
+        'created_at' => 'DATETIME(6) NOT NULL',
         'PRIMARY KEY' => 'id',
         'INDEX zone_id' => ['zone', 'id'],
         'INDEX kind' => 'kind',

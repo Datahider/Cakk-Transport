@@ -4,9 +4,7 @@ declare(strict_types=1);
 
 namespace CakkTransport\data;
 
-use losthost\DB\DBObject;
-
-final class Lane extends DBObject
+final class Lane extends UpdatableTransportDBObject
 {
     public const METADATA = [
         'id' => 'BIGINT UNSIGNED NOT NULL AUTO_INCREMENT',
@@ -15,11 +13,34 @@ final class Lane extends DBObject
         'created_by_agent_id' => 'BIGINT UNSIGNED NOT NULL',
         'payload_count' => 'INT UNSIGNED NOT NULL DEFAULT 0',
         'last_payload_id' => 'BIGINT UNSIGNED NULL',
-        'created_at' => 'DATETIME NOT NULL',
-        'updated_at' => 'DATETIME NOT NULL',
+        'created_at' => 'DATETIME(6) NOT NULL',
+        'updated_at' => 'DATETIME(6) NOT NULL',
+        'revision' => 'DATETIME(6) NOT NULL',
         'PRIMARY KEY' => 'id',
         'INDEX route_id' => 'route_id',
         'INDEX route_is_default' => ['route_id', 'is_default'],
         'INDEX created_by_agent_id' => 'created_by_agent_id',
+        'INDEX revision' => 'revision',
     ];
+
+    protected function intranInsert($comment, $data)
+    {
+        $route = new Route(['id' => (int) $this->route_id]);
+        $route->write('', $route->revisionOnlyWrite($this->revision));
+        parent::intranInsert($comment, $data);
+    }
+
+    protected function intranUpdate($comment, $data)
+    {
+        $route = new Route(['id' => (int) $this->route_id]);
+        $route->write('', $route->revisionOnlyWrite($this->revision));
+        parent::intranUpdate($comment, $data);
+    }
+
+    protected function intranDelete($comment, $data)
+    {
+        $route = new Route(['id' => (int) $this->route_id]);
+        $route->write('', $route->revisionOnlyWrite(new \DateTimeImmutable()));
+        parent::intranDelete($comment, $data);
+    }
 }

@@ -249,6 +249,11 @@ final class App
                 return;
             }
 
+            if (preg_match('#^/payloads/([^/]+)/body$#', $path, $matches) === 1 && $method === 'PUT') {
+                $this->respond($this->updatePayloadBody($actor, rawurldecode($matches[1])));
+                return;
+            }
+
             if (preg_match('#^/payloads/([^/]+)$#', $path, $matches) === 1 && $method === 'DELETE') {
                 $this->respond($this->deletePayload($actor, rawurldecode($matches[1])));
                 return;
@@ -291,7 +296,7 @@ final class App
 
     private function register(): array
     {
-        $now = new DateTimeImmutable();
+        $now = $this->now();
         $password = $this->randomToken(24);
         $payload = $this->readJsonBody();
         $zone = $this->requiredUuidField($payload, 'zone');
@@ -310,7 +315,7 @@ final class App
         $actor->zone = $zone;
         $actor->is_system = $isSystem;
         $actor->password_hash = password_hash($password, PASSWORD_DEFAULT);
-        $actor->created_at = $now;
+        $this->stampMutable($actor, $now, true);
         $actor->write();
 
         [$session, $sessionToken] = $this->createSessionRecord(
@@ -377,7 +382,9 @@ final class App
     private function revokeSession(Agent $actor, string $sessionPublicId): array
     {
         $session = $this->loadSessionForAgent($actor, $sessionPublicId);
-        $session->revoked_at = new DateTimeImmutable();
+        $now = $this->now();
+        $session->revoked_at = $now;
+        $session->updated_at = $now;
         $session->write();
 
         return [
@@ -537,7 +544,7 @@ final class App
             $subscriberIds
         );
 
-        $now = new DateTimeImmutable();
+        $now = $this->now();
 
         $transaction = $this->beginTransportMutation($actor, [
             TransportTransaction::OBJECT_ROUTE,
@@ -548,14 +555,14 @@ final class App
             $route = new Route();
             $route->zone = (string) $actor->zone;
             $route->owner_agent_id = $systemOwned ? null : (int) $actor->id;
-            $route->created_at = $now;
+            $this->stampMutable($route, $now, true);
             $transaction->write(TransportTransaction::OBJECT_ROUTE, $route);
 
             $membership = new Subscription();
             $membership->route_id = (int) $route->id;
             $membership->agent_id = (int) $actor->id;
             $membership->role = $systemOwned ? Subscription::ROLE_ADMIN : Subscription::ROLE_OWNER;
-            $membership->created_at = $now;
+            $this->stampMutable($membership, $now, true);
             $transaction->write(TransportTransaction::OBJECT_SUBSCRIPTION, $membership);
 
             foreach ($subscriberIds as $subscriberId) {
@@ -564,7 +571,7 @@ final class App
                 $spaceSubscription->route_id = (int) $route->id;
                 $spaceSubscription->agent_id = (int) $subscriptionSubscriber->id;
                 $spaceSubscription->role = Subscription::ROLE_PUBLISHER;
-                $spaceSubscription->created_at = $now;
+                $this->stampMutable($spaceSubscription, $now, true);
                 $transaction->write(TransportTransaction::OBJECT_SUBSCRIPTION, $spaceSubscription);
             }
 
@@ -728,7 +735,7 @@ final class App
         $sql = 'SELECT f.* FROM [Route] f
             INNER JOIN [Subscription] fm ON fm.route_id = f.id
             WHERE fm.agent_id = ?
-            ORDER BY f.id ASC';
+            ORDER BY f.revision DESC, f.id DESC';
         $sth = DB::prepare($sql);
         $sth->execute([(int) $actor->id]);
 
@@ -799,15 +806,22 @@ final class App
             $this->error(403, 'Only route owner can assign admin role');
         }
 
+        $now = $this->now();
         $membership = new Subscription();
         $membership->route_id = (int) $route->id;
         $membership->agent_id = (int) $target->id;
         $membership->role = $role;
-        $membership->created_at = new DateTimeImmutable();
-        $transaction = $this->beginTransportMutation($actor, [TransportTransaction::OBJECT_SUBSCRIPTION]);
+        $this->stampMutable($membership, $now, true);
+        $transaction = $this->beginTransportMutation($actor, [
+            TransportTransaction::OBJECT_SUBSCRIPTION,
+            TransportTransaction::OBJECT_ROUTE,
+        ]);
         try {
             $transaction->write(TransportTransaction::OBJECT_SUBSCRIPTION, $membership);
-            $transaction->updateLog('subscription_added', [TransportTransaction::OBJECT_SUBSCRIPTION], [
+            $transaction->updateLog('subscription_added', [
+                TransportTransaction::OBJECT_SUBSCRIPTION,
+                TransportTransaction::OBJECT_ROUTE,
+            ], [
                 'route_id' => (int) $route->id,
                 'agent_id' => (int) $target->id,
                 'role' => $role,
@@ -847,16 +861,23 @@ final class App
         $route = $this->loadRouteForMember($actor, $routePublicId);
         $this->assertCanCreateLane($actor, $route);
 
-        $transaction = $this->beginTransportMutation($actor, [TransportTransaction::OBJECT_LANE]);
+        $now = $this->now();
+        $transaction = $this->beginTransportMutation($actor, [
+            TransportTransaction::OBJECT_LANE,
+            TransportTransaction::OBJECT_ROUTE,
+        ]);
         try {
             $lane = $this->createLaneRecord(
                 $transaction,
                 $route,
                 $actor,
                 false,
-                new DateTimeImmutable(),
+                $now,
             );
-            $transaction->updateLog('lane_created', [TransportTransaction::OBJECT_LANE], [
+            $transaction->updateLog('lane_created', [
+                TransportTransaction::OBJECT_LANE,
+                TransportTransaction::OBJECT_ROUTE,
+            ], [
                 'route_id' => (int) $route->id,
                 'lane_id' => (int) $lane->id,
             ], [
@@ -958,7 +979,9 @@ final class App
         $lane = $this->loadLaneForMember($actor, $lanePublicId);
         $route = new Route(['id' => (int) $lane->route_id]);
         $this->assertHasMaxRouteRole($actor, $route);
+        $now = $this->now();
         $transaction = $this->beginTransportMutation($actor, [
+            TransportTransaction::OBJECT_ROUTE,
             TransportTransaction::OBJECT_LANE,
             TransportTransaction::OBJECT_LANE_META,
             TransportTransaction::OBJECT_LANE_READ_STATE,
@@ -971,9 +994,10 @@ final class App
             $this->deletePayloadsForLaneId($transaction, (int) $lane->id);
             $lane->payload_count = 0;
             $lane->last_payload_id = null;
-            $lane->updated_at = new DateTimeImmutable();
+            $this->stampMutable($lane, $now);
             $transaction->write(TransportTransaction::OBJECT_LANE, $lane);
             $transaction->updateLog('lane_cleared', [
+                TransportTransaction::OBJECT_ROUTE,
                 TransportTransaction::OBJECT_LANE,
                 TransportTransaction::OBJECT_LANE_META,
                 TransportTransaction::OBJECT_LANE_READ_STATE,
@@ -1017,7 +1041,9 @@ final class App
             }
 
             $readState->last_read_payload_id = $lastReadPayloadId;
-            $readState->read_at = new DateTimeImmutable();
+            $now = $this->now();
+            $readState->read_at = $now;
+            $this->stampMutable($readState, $now, !isset($readState->created_at));
             $transaction->write(TransportTransaction::OBJECT_LANE_READ_STATE, $readState);
             $transaction->updateLog('lane_read_state_updated', [TransportTransaction::OBJECT_LANE_READ_STATE], [
                 'lane_id' => (int) $lane->id,
@@ -1048,7 +1074,9 @@ final class App
 
         $route = new Route(['id' => (int) $lane->route_id]);
         $this->assertHasMaxRouteRole($actor, $route);
+        $now = $this->now();
         $transaction = $this->beginTransportMutation($actor, [
+            TransportTransaction::OBJECT_ROUTE,
             TransportTransaction::OBJECT_LANE,
             TransportTransaction::OBJECT_LANE_META,
             TransportTransaction::OBJECT_LANE_READ_STATE,
@@ -1061,6 +1089,7 @@ final class App
             $this->deletePayloadsForLaneId($transaction, (int) $lane->id);
             $transaction->delete(TransportTransaction::OBJECT_LANE, new Lane(['id' => (int) $lane->id]));
             $transaction->updateLog('lane_deleted', [
+                TransportTransaction::OBJECT_ROUTE,
                 TransportTransaction::OBJECT_LANE,
                 TransportTransaction::OBJECT_LANE_META,
                 TransportTransaction::OBJECT_LANE_READ_STATE,
@@ -1114,10 +1143,11 @@ final class App
         $this->assertCanCreatePayload($actor, $route);
         $binaryPayload = $this->readRawPayloadBody();
 
-        $now = new DateTimeImmutable();
+        $now = $this->now();
         $transaction = $this->beginTransportMutation($actor, [
             TransportTransaction::OBJECT_PAYLOAD,
             TransportTransaction::OBJECT_LANE,
+            TransportTransaction::OBJECT_ROUTE,
         ]);
         try {
             $payload = new Payload();
@@ -1126,16 +1156,17 @@ final class App
             $payload->payload = $binaryPayload;
             $payload->payload_sha256 = hash('sha256', $binaryPayload);
             $payload->payload_size = strlen($binaryPayload);
-            $payload->created_at = $now;
+            $this->stampMutable($payload, $now, true);
             $transaction->write(TransportTransaction::OBJECT_PAYLOAD, $payload);
 
             $lane->payload_count = (int) $lane->payload_count + 1;
             $lane->last_payload_id = (int) $payload->id;
-            $lane->updated_at = $now;
+            $this->stampMutable($lane, $now);
             $transaction->write(TransportTransaction::OBJECT_LANE, $lane);
             $transaction->updateLog('payload_created', [
                 TransportTransaction::OBJECT_PAYLOAD,
                 TransportTransaction::OBJECT_LANE,
+                TransportTransaction::OBJECT_ROUTE,
             ], [
                 'lane_id' => (int) $lane->id,
                 'payload_id' => (int) $payload->id,
@@ -1163,10 +1194,12 @@ final class App
         $lane = new Lane(['id' => (int) $payload->lane_id]);
 
         $route = new Route(['id' => (int) $lane->route_id]);
+        $now = $this->now();
         $transaction = $this->beginTransportMutation($actor, [
             TransportTransaction::OBJECT_PAYLOAD,
             TransportTransaction::OBJECT_PAYLOAD_META,
             TransportTransaction::OBJECT_LANE,
+            TransportTransaction::OBJECT_ROUTE,
         ]);
         try {
             $this->deletePayloadMetaForPayloadId($transaction, $deletedPayloadId);
@@ -1179,12 +1212,13 @@ final class App
                 $lastPayloadId = $sth->fetchColumn();
                 $lane->last_payload_id = $lastPayloadId !== false ? (int) $lastPayloadId : null;
             }
-            $lane->updated_at = new DateTimeImmutable();
+            $this->stampMutable($lane, $now);
             $transaction->write(TransportTransaction::OBJECT_LANE, $lane);
             $transaction->updateLog('payload_deleted', [
                 TransportTransaction::OBJECT_PAYLOAD,
                 TransportTransaction::OBJECT_PAYLOAD_META,
                 TransportTransaction::OBJECT_LANE,
+                TransportTransaction::OBJECT_ROUTE,
             ], [
                 'payload_id' => $deletedPayloadId,
                 'lane_id' => (int) $lane->id,
@@ -1201,6 +1235,53 @@ final class App
 
         return [
             'ok' => true,
+        ];
+    }
+
+    private function updatePayloadBody(Agent $actor, string $payloadId): array
+    {
+        $payload = $this->loadUpdatablePayload($actor, $payloadId);
+        $lane = new Lane(['id' => (int) $payload->lane_id]);
+        $route = new Route(['id' => (int) $lane->route_id]);
+        $binaryPayload = $this->readRawPayloadBody();
+        $now = $this->now();
+
+        $transaction = $this->beginTransportMutation($actor, [
+            TransportTransaction::OBJECT_PAYLOAD,
+            TransportTransaction::OBJECT_LANE,
+            TransportTransaction::OBJECT_ROUTE,
+        ]);
+        try {
+            $payload->payload = $binaryPayload;
+            $payload->payload_sha256 = hash('sha256', $binaryPayload);
+            $payload->payload_size = strlen($binaryPayload);
+            $this->stampMutable($payload, $now);
+            $transaction->write(TransportTransaction::OBJECT_PAYLOAD, $payload);
+
+            $lane->last_payload_id = (int) $payload->id;
+            $this->stampMutable($lane, $now);
+            $transaction->write(TransportTransaction::OBJECT_LANE, $lane);
+            $transaction->updateLog('payload_updated', [
+                TransportTransaction::OBJECT_PAYLOAD,
+                TransportTransaction::OBJECT_LANE,
+                TransportTransaction::OBJECT_ROUTE,
+            ], [
+                'lane_id' => (int) $lane->id,
+                'payload_id' => (int) $payload->id,
+            ], [
+                'route_id' => (int) $route->id,
+                'lane_id' => (int) $lane->id,
+                'payload_id' => (int) $payload->id,
+            ]);
+            $transaction->commit();
+        } catch (Throwable $error) {
+            $transaction->rollBack();
+            throw $error;
+        }
+
+        return [
+            'ok' => true,
+            'payload' => $this->serializePayload($payload),
         ];
     }
 
@@ -1233,14 +1314,20 @@ final class App
         $payloadMeta->agent_id = (int) $actor->id;
         $payloadMeta->meta_key = $metaKey;
         $payloadMeta->meta_value = $metaValue;
-        $payloadMeta->created_at = new DateTimeImmutable();
-        $payloadMeta->updated_at = $payloadMeta->created_at;
+        $now = $this->now();
+        $this->stampMutable($payloadMeta, $now, true);
         $lane = new Lane(['id' => (int) $payload->lane_id]);
         $route = new Route(['id' => (int) $lane->route_id]);
-        $transaction = $this->beginTransportMutation($actor, [TransportTransaction::OBJECT_PAYLOAD_META]);
+        $transaction = $this->beginTransportMutation($actor, [
+            TransportTransaction::OBJECT_PAYLOAD_META,
+            TransportTransaction::OBJECT_PAYLOAD,
+        ]);
         try {
             $transaction->write(TransportTransaction::OBJECT_PAYLOAD_META, $payloadMeta);
-            $transaction->updateLog('payload_meta_created', [TransportTransaction::OBJECT_PAYLOAD_META], [
+            $transaction->updateLog('payload_meta_created', [
+                TransportTransaction::OBJECT_PAYLOAD_META,
+                TransportTransaction::OBJECT_PAYLOAD,
+            ], [
                 'payload_id' => (int) $payload->id,
                 'payload_meta_id' => (int) $payloadMeta->id,
             ], [
@@ -1281,11 +1368,18 @@ final class App
         $route = new Route(['id' => (int) $lane->route_id]);
         $payloadMeta->meta_key = $metaKey;
         $payloadMeta->meta_value = $metaValue;
-        $payloadMeta->updated_at = new DateTimeImmutable();
-        $transaction = $this->beginTransportMutation($actor, [TransportTransaction::OBJECT_PAYLOAD_META]);
+        $now = $this->now();
+        $this->stampMutable($payloadMeta, $now);
+        $transaction = $this->beginTransportMutation($actor, [
+            TransportTransaction::OBJECT_PAYLOAD_META,
+            TransportTransaction::OBJECT_PAYLOAD,
+        ]);
         try {
             $transaction->write(TransportTransaction::OBJECT_PAYLOAD_META, $payloadMeta);
-            $transaction->updateLog('payload_meta_updated', [TransportTransaction::OBJECT_PAYLOAD_META], [
+            $transaction->updateLog('payload_meta_updated', [
+                TransportTransaction::OBJECT_PAYLOAD_META,
+                TransportTransaction::OBJECT_PAYLOAD,
+            ], [
                 'payload_meta_id' => (int) $payloadMeta->id,
                 'payload_id' => (int) $payload->id,
             ], [
@@ -1316,11 +1410,18 @@ final class App
         $route = new Route(['id' => (int) $lane->route_id]);
         $payloadMeta->meta_key = $metaKey;
         $payloadMeta->meta_value = $metaValue;
-        $payloadMeta->updated_at = new DateTimeImmutable();
-        $transaction = $this->beginTransportMutation($actor, [TransportTransaction::OBJECT_PAYLOAD_META]);
+        $now = $this->now();
+        $this->stampMutable($payloadMeta, $now);
+        $transaction = $this->beginTransportMutation($actor, [
+            TransportTransaction::OBJECT_PAYLOAD_META,
+            TransportTransaction::OBJECT_PAYLOAD,
+        ]);
         try {
             $transaction->write(TransportTransaction::OBJECT_PAYLOAD_META, $payloadMeta);
-            $transaction->updateLog('payload_meta_updated', [TransportTransaction::OBJECT_PAYLOAD_META], [
+            $transaction->updateLog('payload_meta_updated', [
+                TransportTransaction::OBJECT_PAYLOAD_META,
+                TransportTransaction::OBJECT_PAYLOAD,
+            ], [
                 'payload_meta_id' => (int) $payloadMeta->id,
                 'payload_id' => (int) $payload->id,
             ], [
@@ -1351,10 +1452,17 @@ final class App
         $payloadIdInt = (int) $payload->id;
         $laneIdInt = (int) $lane->id;
         $routeIdInt = (int) $route->id;
-        $transaction = $this->beginTransportMutation($actor, [TransportTransaction::OBJECT_PAYLOAD_META]);
+        $now = $this->now();
+        $transaction = $this->beginTransportMutation($actor, [
+            TransportTransaction::OBJECT_PAYLOAD_META,
+            TransportTransaction::OBJECT_PAYLOAD,
+        ]);
         try {
             $transaction->delete(TransportTransaction::OBJECT_PAYLOAD_META, $payloadMeta);
-            $transaction->updateLog('payload_meta_deleted', [TransportTransaction::OBJECT_PAYLOAD_META], [
+            $transaction->updateLog('payload_meta_deleted', [
+                TransportTransaction::OBJECT_PAYLOAD_META,
+                TransportTransaction::OBJECT_PAYLOAD,
+            ], [
                 'payload_meta_id' => $payloadMetaIdInt,
                 'payload_id' => $payloadIdInt,
             ], [
@@ -1408,8 +1516,10 @@ final class App
         }
 
         $actor = new Agent(['id' => (int) $session->agent_id]);
-        $session->last_seen_at = new DateTimeImmutable();
-        $session->expires_at = $session->last_seen_at->modify('+180 days');
+        $now = $this->now();
+        $session->last_seen_at = $now;
+        $session->expires_at = $now->modify('+180 days');
+        $session->updated_at = $now;
         $session->write();
 
         return [$actor, $session];
@@ -1420,7 +1530,7 @@ final class App
      */
     private function createSessionRecord(Agent $actor, ?string $deviceLabel): array
     {
-        $now = new DateTimeImmutable();
+        $now = $this->now();
         $token = 'sess_' . $this->randomToken(48);
 
         $session = new AgentSession();
@@ -1428,6 +1538,7 @@ final class App
         $session->token_hash = hash('sha256', $token);
         $session->device_label = $deviceLabel;
         $session->created_at = $now;
+        $session->updated_at = $now;
         $session->last_seen_at = $now;
         $session->expires_at = $now->modify('+180 days');
         $session->revoked_at = null;
@@ -1553,6 +1664,28 @@ final class App
         return $payload;
     }
 
+    private function loadUpdatablePayload(Agent $actor, string $payloadId): Payload
+    {
+        $payload = $this->loadReadablePayload($actor, $payloadId);
+        $lane = new Lane(['id' => (int) $payload->lane_id]);
+        $route = new Route(['id' => (int) $lane->route_id]);
+        $role = $this->routeRoleForAgent($actor, $route);
+
+        if ((int) $payload->author_agent_id === (int) $actor->id) {
+            if ($role === Subscription::ROLE_GUEST) {
+                $this->error(403, 'Guest cannot update payload');
+            }
+
+            return $payload;
+        }
+
+        if (!in_array($role, [Subscription::ROLE_OWNER, Subscription::ROLE_ADMIN, Subscription::ROLE_EDITOR], true)) {
+            $this->error(403, 'Agent cannot update payload owned by another agent');
+        }
+
+        return $payload;
+    }
+
     private function loadLaneReadState(Lane $lane, Agent $actor): ?LaneReadState
     {
         $list = new DBList(LaneReadState::class, [
@@ -1596,13 +1729,22 @@ final class App
 
     private function writeAgentMeta(Agent $actor, array $meta, bool $replaceAll): void
     {
-        $transaction = $this->beginTransportMutation($actor, [TransportTransaction::OBJECT_AGENT_META]);
+        $now = $this->now();
+        $transaction = $this->beginTransportMutation($actor, [
+            TransportTransaction::OBJECT_AGENT_META,
+            TransportTransaction::OBJECT_AGENT,
+        ]);
         try {
             $this->syncMetaRecords($transaction, AgentMeta::class, ['agent_id' => (int) $actor->id], 'meta_key', 'meta_value', $meta, $replaceAll, [
                 'agent_id' => (int) $actor->id,
-                'updated_at' => new DateTimeImmutable(),
+                'created_at' => $now,
+                'updated_at' => $now,
+                'revision' => $now,
             ]);
-            $transaction->updateLog('agent_meta_updated', [TransportTransaction::OBJECT_AGENT_META], [
+            $transaction->updateLog('agent_meta_updated', [
+                TransportTransaction::OBJECT_AGENT_META,
+                TransportTransaction::OBJECT_AGENT,
+            ], [
                 'agent_id' => (int) $actor->id,
             ]);
             $transaction->commit();
@@ -1614,13 +1756,22 @@ final class App
 
     private function writeRouteMeta(Agent $actor, Route $route, array $meta, bool $replaceAll): void
     {
-        $transaction = $this->beginTransportMutation($actor, [TransportTransaction::OBJECT_ROUTE_META]);
+        $now = $this->now();
+        $transaction = $this->beginTransportMutation($actor, [
+            TransportTransaction::OBJECT_ROUTE_META,
+            TransportTransaction::OBJECT_ROUTE,
+        ]);
         try {
             $this->syncMetaRecords($transaction, RouteMeta::class, ['route_id' => (int) $route->id], 'meta_key', 'meta_value', $meta, $replaceAll, [
                 'route_id' => (int) $route->id,
-                'updated_at' => new DateTimeImmutable(),
+                'created_at' => $now,
+                'updated_at' => $now,
+                'revision' => $now,
             ]);
-            $transaction->updateLog('route_meta_updated', [TransportTransaction::OBJECT_ROUTE_META], [
+            $transaction->updateLog('route_meta_updated', [
+                TransportTransaction::OBJECT_ROUTE_META,
+                TransportTransaction::OBJECT_ROUTE,
+            ], [
                 'route_id' => (int) $route->id,
             ], [
                 'route_id' => (int) $route->id,
@@ -1634,13 +1785,22 @@ final class App
 
     private function writeLaneMeta(Agent $actor, Route $route, Lane $lane, array $meta, bool $replaceAll): void
     {
-        $transaction = $this->beginTransportMutation($actor, [TransportTransaction::OBJECT_LANE_META]);
+        $now = $this->now();
+        $transaction = $this->beginTransportMutation($actor, [
+            TransportTransaction::OBJECT_LANE_META,
+            TransportTransaction::OBJECT_LANE,
+        ]);
         try {
             $this->syncMetaRecords($transaction, LaneMeta::class, ['lane_id' => (int) $lane->id], 'meta_key', 'meta_value', $meta, $replaceAll, [
                 'lane_id' => (int) $lane->id,
-                'updated_at' => new DateTimeImmutable(),
+                'created_at' => $now,
+                'updated_at' => $now,
+                'revision' => $now,
             ]);
-            $transaction->updateLog('lane_meta_updated', [TransportTransaction::OBJECT_LANE_META], [
+            $transaction->updateLog('lane_meta_updated', [
+                TransportTransaction::OBJECT_LANE_META,
+                TransportTransaction::OBJECT_LANE,
+            ], [
                 'lane_id' => (int) $lane->id,
             ], [
                 'route_id' => (int) $route->id,
@@ -1772,6 +1932,8 @@ final class App
             'zone' => (string) $actor->zone,
             'is_system' => (bool) $actor->is_system,
             'created_at' => $this->formatDateTime($actor->created_at),
+            'updated_at' => $this->formatDateTime($actor->updated_at),
+            'revision' => $this->formatDateTime($actor->revision),
         ];
 
         if ($metaSelector !== null) {
@@ -1788,6 +1950,7 @@ final class App
             'device_label' => $session->device_label !== null ? (string) $session->device_label : null,
             'is_current' => (int) $session->id === $currentSessionId,
             'created_at' => $this->formatDateTime($session->created_at),
+            'updated_at' => $this->formatDateTime($session->updated_at),
             'last_seen_at' => $this->formatDateTime($session->last_seen_at),
             'expires_at' => $this->formatDateTime($session->expires_at),
             'revoked_at' => $this->formatDateTime($session->revoked_at),
@@ -1806,6 +1969,8 @@ final class App
                 : 'system',
             'default_lane_id' => $defaultLane !== null ? (int) $defaultLane->id : null,
             'created_at' => $this->formatDateTime($route->created_at),
+            'updated_at' => $this->formatDateTime($route->updated_at),
+            'revision' => $this->formatDateTime($route->revision),
         ];
 
         if ($metaSelector !== null) {
@@ -1831,6 +1996,7 @@ final class App
             'read_state' => $readState !== null ? $this->serializeLaneReadState($readState) : null,
             'created_at' => $this->formatDateTime($lane->created_at),
             'updated_at' => $this->formatDateTime($lane->updated_at),
+            'revision' => $this->formatDateTime($lane->revision),
         ];
 
         if ($metaSelector !== null) {
@@ -1848,7 +2014,10 @@ final class App
             'last_read_payload_id' => $readState->last_read_payload_id !== null
                 ? (int) $readState->last_read_payload_id
                 : null,
+            'created_at' => $this->formatDateTime($readState->created_at),
+            'updated_at' => $this->formatDateTime($readState->updated_at),
             'read_at' => $this->formatDateTime($readState->read_at),
+            'revision' => $this->formatDateTime($readState->revision),
         ];
     }
 
@@ -1875,8 +2044,7 @@ final class App
         $lane->created_by_agent_id = (int) $actor->id;
         $lane->payload_count = 0;
         $lane->last_payload_id = null;
-        $lane->created_at = $now;
-        $lane->updated_at = $now;
+        $this->stampMutable($lane, $now, true);
         $transaction->write(TransportTransaction::OBJECT_LANE, $lane);
 
         return $lane;
@@ -2199,8 +2367,12 @@ final class App
                 $this->error(422, 'meta keys must be non-empty strings');
             }
 
+            $isNew = !isset($existing[$key]);
             $record = $existing[$key] ?? new $className();
             foreach ($baseValues as $field => $fieldValue) {
+                if ($field === 'created_at' && !$isNew) {
+                    continue;
+                }
                 $record->{$field} = $fieldValue;
             }
             $record->{$keyField} = $key;
@@ -2292,6 +2464,8 @@ final class App
             'payload_sha256' => (string) $payload->payload_sha256,
             'payload_size' => (int) $payload->payload_size,
             'created_at' => $this->formatDateTime($payload->created_at),
+            'updated_at' => $this->formatDateTime($payload->updated_at),
+            'revision' => $this->formatDateTime($payload->revision),
         ];
     }
 
@@ -2308,6 +2482,7 @@ final class App
             ],
             'created_at' => $this->formatDateTime($payloadMeta->created_at),
             'updated_at' => $this->formatDateTime($payloadMeta->updated_at),
+            'revision' => $this->formatDateTime($payloadMeta->revision),
         ];
     }
 
@@ -2482,7 +2657,7 @@ final class App
                 $presence = new AgentPresence();
                 $presence->agent_id = (int) $actor->id;
                 $presence->connection_count = 1;
-                $presence->updated_at = new DateTimeImmutable();
+                $this->stampMutable($presence, $this->now(), true);
                 $transaction->write(TransportTransaction::OBJECT_PRESENCE, $presence);
                 $transaction->updateLog('agent_online', [TransportTransaction::OBJECT_PRESENCE], [
                     'agent_id' => (int) $actor->id,
@@ -2497,7 +2672,7 @@ final class App
         }
 
         $presence->connection_count = (int) $presence->connection_count + 1;
-        $presence->updated_at = new DateTimeImmutable();
+        $this->stampMutable($presence, $this->now());
         $presence->write();
     }
 
@@ -2511,7 +2686,7 @@ final class App
         $remaining = max(0, (int) $presence->connection_count - 1);
         if ($remaining > 0) {
             $presence->connection_count = $remaining;
-            $presence->updated_at = new DateTimeImmutable();
+            $this->stampMutable($presence, $this->now());
             $presence->write();
             return;
         }
@@ -2686,7 +2861,7 @@ final class App
     private function formatDateTime(mixed $value): string
     {
         if ($value instanceof \DateTimeInterface) {
-            return $value->format('Y-m-d H:i:s');
+            return $value->format('Y-m-d H:i:s.u');
         }
 
         if (is_string($value) && $value !== '') {
@@ -2694,6 +2869,21 @@ final class App
         }
 
         return '';
+    }
+
+    private function now(): DateTimeImmutable
+    {
+        return new DateTimeImmutable();
+    }
+
+    private function stampMutable(object $object, DateTimeImmutable $now, bool $isNew = false): void
+    {
+        if ($isNew) {
+            $object->created_at = $now;
+        }
+
+        $object->updated_at = $now;
+        $object->revision = $now;
     }
 
     private function respond(array $payload, int $statusCode = 200): void

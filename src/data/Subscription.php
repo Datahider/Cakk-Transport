@@ -4,9 +4,7 @@ declare(strict_types=1);
 
 namespace CakkTransport\data;
 
-use losthost\DB\DBObject;
-
-final class Subscription extends DBObject
+final class Subscription extends UpdatableTransportDBObject
 {
     public const ROLE_OWNER = 'owner';
     public const ROLE_ADMIN = 'admin';
@@ -19,9 +17,33 @@ final class Subscription extends DBObject
         'route_id' => 'BIGINT UNSIGNED NOT NULL',
         'agent_id' => 'BIGINT UNSIGNED NOT NULL',
         'role' => 'ENUM("owner","admin","editor","publisher","guest") NOT NULL',
-        'created_at' => 'DATETIME NOT NULL',
+        'created_at' => 'DATETIME(6) NOT NULL',
+        'updated_at' => 'DATETIME(6) NOT NULL',
+        'revision' => 'DATETIME(6) NOT NULL',
         'PRIMARY KEY' => 'id',
         'UNIQUE INDEX route_agent' => ['route_id', 'agent_id'],
         'INDEX agent_id' => 'agent_id',
+        'INDEX revision' => 'revision',
     ];
+
+    protected function intranInsert($comment, $data)
+    {
+        $route = new Route(['id' => (int) $this->route_id]);
+        $route->write('', $route->revisionOnlyWrite($this->revision));
+        parent::intranInsert($comment, $data);
+    }
+
+    protected function intranUpdate($comment, $data)
+    {
+        $route = new Route(['id' => (int) $this->route_id]);
+        $route->write('', $route->revisionOnlyWrite($this->revision));
+        parent::intranUpdate($comment, $data);
+    }
+
+    protected function intranDelete($comment, $data)
+    {
+        $route = new Route(['id' => (int) $this->route_id]);
+        $route->write('', $route->revisionOnlyWrite(new \DateTimeImmutable()));
+        parent::intranDelete($comment, $data);
+    }
 }
