@@ -754,7 +754,11 @@ final class AcceptanceRunner
         $this->assertStatus($publisherDeleteRoute, 403);
         $this->assertSame('Agent does not have maximal route role', $publisherDeleteRoute['json']['error'] ?? null, 'publisher cannot delete route');
 
-        $clearLane = $this->json('POST', '/lanes/' . $this->laneId('extra') . '/clear', [], $this->token('c'));
+        $clearLaneDenied = $this->json('POST', '/lanes/' . $this->laneId('extra') . '/clear', [], $this->token('c'));
+        $this->assertStatus($clearLaneDenied, 403);
+        $this->assertSame('Agent does not have maximal route role', $clearLaneDenied['json']['error'] ?? null, 'admin cannot clear lane if owner exists');
+
+        $clearLane = $this->json('POST', '/lanes/' . $this->laneId('extra') . '/clear', [], $this->token('a'));
         $this->assertStatus($clearLane, 200);
 
         $deleteLaneDenied = $this->json('DELETE', '/lanes/' . $this->laneId('extra'), null, $this->token('b'));
@@ -1029,7 +1033,16 @@ final class AcceptanceRunner
      */
     private function assertStatus(array $response, int $status): void
     {
-        $this->assertSame($status, $response['status'], 'HTTP status');
+        $this->assertions++;
+        if ($response['status'] !== $status) {
+            throw new RuntimeException(sprintf(
+                'Assertion failed: HTTP status. Expected %d, got %d. Body: %s',
+                $status,
+                (int) $response['status'],
+                $response['body']
+            ));
+        }
+        $this->out('  ok  HTTP status');
     }
 
     private function assertTrue(bool $condition, string $message): void
