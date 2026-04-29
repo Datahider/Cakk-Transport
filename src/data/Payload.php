@@ -24,23 +24,25 @@ final class Payload extends UpdatableTransportDBObject
 
     protected function intranInsert($comment, $data)
     {
+        $data[static::REVISION_ONLY] = true;
         $lane = new Lane(['id' => (int) $this->lane_id]);
-        $lane->write('', [Lane::NOW => $this->revision, Lane::REVISION_ONLY => true]);
+        $lane->write($comment, $data);
         parent::intranInsert($comment, $data);
     }
 
     protected function intranUpdate($comment, $data)
     {
+        $data[static::REVISION_ONLY] = true;
         $lane = new Lane(['id' => (int) $this->lane_id]);
-        $lane->write('', [Lane::NOW => $this->revision, Lane::REVISION_ONLY => true]);
+        $lane->write($comment, $data);
         parent::intranUpdate($comment, $data);
     }
 
     protected function intranDelete($comment, $data)
     {
-        $now = new \DateTimeImmutable();
+        $data[static::REVISION_ONLY] = true;
         $lane = new Lane(['id' => (int) $this->lane_id]);
-        $lane->write('', [Lane::NOW => $now, Lane::REVISION_ONLY => true]);
+        $lane->write($comment, $data);
         parent::intranDelete($comment, $data);
     }
 }
