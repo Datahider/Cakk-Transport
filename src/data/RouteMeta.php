@@ -23,21 +23,22 @@ final class RouteMeta extends UpdatableTransportDBObject
     protected function intranInsert($comment, $data)
     {
         $route = new Route(['id' => (int) $this->route_id]);
-        $route->write('', $route->revisionOnlyWrite($this->revision));
+        $route->write('', [Route::NOW => $this->revision, Route::REVISION_ONLY => true]);
         parent::intranInsert($comment, $data);
     }
 
     protected function intranUpdate($comment, $data)
     {
         $route = new Route(['id' => (int) $this->route_id]);
-        $route->write('', $route->revisionOnlyWrite($this->revision));
+        $route->write('', [Route::NOW => $this->revision, Route::REVISION_ONLY => true]);
         parent::intranUpdate($comment, $data);
     }
 
     protected function intranDelete($comment, $data)
     {
+        $now = new \DateTimeImmutable();
         $route = new Route(['id' => (int) $this->route_id]);
-        $route->write('', $route->revisionOnlyWrite(new \DateTimeImmutable()));
+        $route->write('', [Route::NOW => $now, Route::REVISION_ONLY => true]);
         parent::intranDelete($comment, $data);
     }
 }

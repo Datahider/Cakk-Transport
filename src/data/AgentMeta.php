@@ -22,22 +22,25 @@ final class AgentMeta extends UpdatableTransportDBObject
 
     protected function intranInsert($comment, $data)
     {
+        $data[static::REVISION_ONLY] = true;
         $agent = new Agent(['id' => (int) $this->agent_id]);
-        $agent->write('', $agent->revisionOnlyWrite($this->revision));
+        $agent->write($comment, $data);
         parent::intranInsert($comment, $data);
     }
 
     protected function intranUpdate($comment, $data)
     {
+        $data[static::REVISION_ONLY] = true;
         $agent = new Agent(['id' => (int) $this->agent_id]);
-        $agent->write('', $agent->revisionOnlyWrite($this->revision));
+        $agent->write($comment, $data);
         parent::intranUpdate($comment, $data);
     }
 
     protected function intranDelete($comment, $data)
     {
+        $data[static::REVISION_ONLY] = true;
         $agent = new Agent(['id' => (int) $this->agent_id]);
-        $agent->write('', $agent->revisionOnlyWrite(new \DateTimeImmutable()));
+        $agent->write($comment, $data);
         parent::intranDelete($comment, $data);
     }
 }

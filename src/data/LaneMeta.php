@@ -23,21 +23,22 @@ final class LaneMeta extends UpdatableTransportDBObject
     protected function intranInsert($comment, $data)
     {
         $lane = new Lane(['id' => (int) $this->lane_id]);
-        $lane->write('', $lane->revisionOnlyWrite($this->revision));
+        $lane->write('', [Lane::NOW => $this->revision, Lane::REVISION_ONLY => true]);
         parent::intranInsert($comment, $data);
     }
 
     protected function intranUpdate($comment, $data)
     {
         $lane = new Lane(['id' => (int) $this->lane_id]);
-        $lane->write('', $lane->revisionOnlyWrite($this->revision));
+        $lane->write('', [Lane::NOW => $this->revision, Lane::REVISION_ONLY => true]);
         parent::intranUpdate($comment, $data);
     }
 
     protected function intranDelete($comment, $data)
     {
+        $now = new \DateTimeImmutable();
         $lane = new Lane(['id' => (int) $this->lane_id]);
-        $lane->write('', $lane->revisionOnlyWrite(new \DateTimeImmutable()));
+        $lane->write('', [Lane::NOW => $now, Lane::REVISION_ONLY => true]);
         parent::intranDelete($comment, $data);
     }
 }

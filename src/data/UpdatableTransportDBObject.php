@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace CakkTransport\data;
 
-use DateTimeImmutable;
-
 abstract class UpdatableTransportDBObject extends TransportDBObject
 {
     const REVISION_ONLY = 'revision_only';

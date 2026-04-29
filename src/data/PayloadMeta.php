@@ -25,21 +25,22 @@ final class PayloadMeta extends UpdatableTransportDBObject
     protected function intranInsert($comment, $data)
     {
         $payload = new Payload(['id' => (int) $this->payload_id]);
-        $payload->write('', $payload->revisionOnlyWrite($this->revision));
+        $payload->write('', [Payload::NOW => $this->revision, Payload::REVISION_ONLY => true]);
         parent::intranInsert($comment, $data);
     }
 
     protected function intranUpdate($comment, $data)
     {
         $payload = new Payload(['id' => (int) $this->payload_id]);
-        $payload->write('', $payload->revisionOnlyWrite($this->revision));
+        $payload->write('', [Payload::NOW => $this->revision, Payload::REVISION_ONLY => true]);
         parent::intranUpdate($comment, $data);
     }
 
     protected function intranDelete($comment, $data)
     {
+        $now = new \DateTimeImmutable();
         $payload = new Payload(['id' => (int) $this->payload_id]);
-        $payload->write('', $payload->revisionOnlyWrite(new \DateTimeImmutable()));
+        $payload->write('', [Payload::NOW => $now, Payload::REVISION_ONLY => true]);
         parent::intranDelete($comment, $data);
     }
 }
