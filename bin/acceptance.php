@@ -68,6 +68,7 @@ final class AcceptanceRunner
             $this->scenarioPayloadsAndReadState();
             $this->scenarioPayloadMeta();
             $this->scenarioUpdates();
+            $this->scenarioIdealLazySyncContract();
             $this->scenarioDestructiveOperations();
         } finally {
             $this->stopServer();
@@ -738,6 +739,70 @@ final class AcceptanceRunner
         $this->assertSame([], $zone2Updates['json']['items'] ?? null, 'other zone sees no foreign updates');
     }
 
+    private function scenarioIdealLazySyncContract(): void
+    {
+        $this->step('Ideal lazy sync contract');
+
+        $routesHead = $this->json('POST', '/sync/routes/head', [
+            'limit' => 50,
+            'items' => [],
+        ], $this->token('b'));
+        $this->assertStatus($routesHead, 200);
+        $this->assertLazySyncItems($routesHead, 'routes head');
+
+        $routesFull = $this->json('POST', '/sync/routes/full', [
+            'limit' => 50,
+            'items' => [
+                [
+                    'id' => $this->routeId('main'),
+                    'revision' => (string) ($routesHead['json']['items'][0]['revision'] ?? ''),
+                ],
+            ],
+        ], $this->token('b'));
+        $this->assertStatus($routesFull, 200);
+        $this->assertLazySyncItems($routesFull, 'routes full');
+
+        $lanesHead = $this->json('POST', '/sync/routes/' . $this->routeId('main') . '/lanes/head', [
+            'limit' => 50,
+            'items' => [],
+        ], $this->token('b'));
+        $this->assertStatus($lanesHead, 200);
+        $this->assertLazySyncItems($lanesHead, 'lanes head');
+
+        $lanesFull = $this->json('POST', '/sync/routes/' . $this->routeId('main') . '/lanes/full', [
+            'limit' => 50,
+            'items' => [
+                [
+                    'id' => $this->laneId('extra'),
+                    'revision' => (string) ($lanesHead['json']['items'][0]['revision'] ?? ''),
+                ],
+            ],
+        ], $this->token('b'));
+        $this->assertStatus($lanesFull, 200);
+        $this->assertLazySyncItems($lanesFull, 'lanes full');
+
+        $payloadTail = $this->json('POST', '/sync/lanes/' . $this->laneId('extra') . '/payloads/tail', [
+            'limit' => 100,
+            'items' => [],
+        ], $this->token('b'));
+        $this->assertStatus($payloadTail, 200);
+        $this->assertLazySyncItems($payloadTail, 'payload tail');
+
+        $payloadWindow = $this->json('POST', '/sync/lanes/' . $this->laneId('extra') . '/payloads/window', [
+            'anchor_payload_id' => $this->payloadId('extra1'),
+            'before_limit' => 50,
+            'after_limit' => 50,
+            'items' => [
+                [
+                    'id' => $this->payloadId('extra1'),
+                    'revision' => (string) ($payloadTail['json']['items'][0]['revision'] ?? ''),
+                ],
+            ],
+        ], $this->token('b'));
+        $this->assertStatus($payloadWindow, 200);
+        $this->assertLazySyncItems($payloadWindow, 'payload window');
+    }
+
     private function scenarioDestructiveOperations(): void
     {
         $this->step('Destructive operations');
@@ -953,6 +1018,19 @@ final class AcceptanceRunner
             'body' => $responseBody,
             'json' => $decoded,
         ];
+    }
+
+    /**
+     * @param array{json:array<string, mixed>} $response
+     */
+    private function assertLazySyncItems(array $response, string $label): void
+    {
+        $items = $response['json']['items'] ?? null;
+        $this->assertTrue(is_array($items), $label . ' returns items array');
+        $this->assertTrue(count($items) >= 1, $label . ' returns items');
+        $this->assertTrue(array_key_exists('id', $items[0] ?? []), $label . ' item contains id');
+        $this->assertTrue(array_key_exists('revision', $items[0] ?? []), $label . ' item contains revision');
+        $this->assertTrue(array_key_exists('is_deleted', $items[0] ?? []), $label . ' item contains is_deleted');
     }
 
     /**
