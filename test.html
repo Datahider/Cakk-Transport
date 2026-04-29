@@ -240,7 +240,7 @@
                 <input id="name-b" value="Agent B">
               </label>
             </div>
-            <div class="hint">Общий поток читается из <code>/updates</code> под system-агентом зоны. Обычные агенты читают состояние через <code>/state-patch</code> и обычные state-endpoint'ы.</div>
+            <div class="hint">Общий поток читается из <code>/updates</code> под system-агентом зоны.</div>
           </div>
         </section>
 
@@ -299,7 +299,6 @@
               <button class="secondary" data-preset="register-b">preset: register B</button>
               <button class="secondary" data-preset="register-system">preset: register system</button>
               <button class="secondary" data-preset="login-a">preset: login A</button>
-              <button class="secondary" data-preset="state-patch-a">preset: state patch A</button>
               <button class="secondary" data-preset="create-route">preset: create route</button>
               <button class="secondary" data-preset="post-payload">preset: post payload</button>
               <button class="secondary" data-preset="mark-read">preset: mark read</button>
@@ -354,10 +353,6 @@
       autoPoll: true,
       cursors: { system: 0, a: 0, b: 0 },
       logs: { system: [], a: [], b: [] },
-      statePatch: {
-        a: { after_update_id: 0, known_route_ids: [], known_lane_ids: [], lane_payload_after: {}, lastSignature: "" },
-        b: { after_update_id: 0, known_route_ids: [], known_lane_ids: [], lane_payload_after: {}, lastSignature: "" },
-      },
     };
 
     const $ = (id) => document.getElementById(id);
@@ -409,51 +404,6 @@
       state.cursors.system = result.data.latest_update_id ?? state.cursors.system;
     }
 
-    async function pollAgent(key, token) {
-      if (!token) return;
-      const patchState = state.statePatch[key];
-      const result = await fetchJson(`/state-patch`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          after_update_id: patchState.after_update_id,
-          known_route_ids: patchState.known_route_ids,
-          known_lane_ids: patchState.known_lane_ids,
-          lane_payload_after: patchState.lane_payload_after,
-        }),
-      });
-      if (!result.ok) {
-        appendLog(key, { error: "agent state patch failed", status: result.status, data: result.data });
-        return;
-      }
-
-      const signature = JSON.stringify(result.data);
-      if (signature !== patchState.lastSignature) {
-        appendLog(key, result.data);
-        patchState.lastSignature = signature;
-      }
-
-      patchState.known_route_ids = (result.data.routes_upsert ?? []).map((item) => item.route_id);
-      patchState.known_lane_ids = (result.data.lanes_upsert ?? []).map((item) => item.lane_id);
-      patchState.after_update_id = result.data.latest_update_id ?? patchState.after_update_id;
-      for (const lane of result.data.lanes_upsert ?? []) {
-        if (!(lane.lane_id in patchState.lane_payload_after)) {
-          patchState.lane_payload_after[lane.lane_id] = 0;
-        }
-      }
-      for (const [laneId, payloads] of Object.entries(result.data.payloads_by_lane ?? {})) {
-        for (const payload of payloads) {
-          patchState.lane_payload_after[laneId] = Math.max(
-            patchState.lane_payload_after[laneId] ?? 0,
-            payload.payload_id ?? 0,
-          );
-        }
-      }
-    }
-
     async function pollAll() {
       setStatus("polling");
       $("title-system").textContent = `${$("name-system").value || "Zone System"} Stream`;
@@ -461,8 +411,6 @@
       $("title-b").textContent = `${$("name-b").value || "Agent B"} Stream`;
       try {
         await pollSystem();
-        await pollAgent("a", $("token-a").value.trim());
-        await pollAgent("b", $("token-b").value.trim());
         setStatus("idle");
       } catch (error) {
         appendLog("system", { error: String(error) });
@@ -530,18 +478,6 @@
         $("auth-source").value = "";
         $("req-content-type").value = "application/json";
         $("req-body").value = pretty({ agent_id: 1, password: "replace-me", device_label: "browser-login" });
-      }
-      if (name === "state-patch-a") {
-        $("req-method").value = "POST";
-        $("req-path").value = "/state-patch";
-        $("auth-source").value = "a";
-        $("req-content-type").value = "application/json";
-        $("req-body").value = pretty({
-          after_update_id: 0,
-          known_route_ids: [],
-          known_lane_ids: [],
-          lane_payload_after: {}
-        });
       }
       if (name === "create-route") {
         $("req-method").value = "POST";

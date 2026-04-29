@@ -6,7 +6,6 @@ namespace CakkTransport;
 
 use CakkTransport\data\Agent;
 use CakkTransport\data\AgentMeta;
-use CakkTransport\data\AgentPresence;
 use CakkTransport\data\AgentSession;
 use CakkTransport\data\Lane;
 use CakkTransport\data\LaneMeta;
@@ -85,16 +84,6 @@ final class App
 
             if ($method === 'GET' && $path === '/updates') {
                 $this->respond($this->listUpdates($actor));
-                return;
-            }
-
-            if ($method === 'POST' && $path === '/state-patch') {
-                $this->respond($this->statePatch($actor));
-                return;
-            }
-
-            if ($method === 'GET' && $path === '/state-patch/stream') {
-                $this->streamStatePatch($actor);
                 return;
             }
 
@@ -483,50 +472,6 @@ final class App
         $this->writeAgentMeta($actor, $remaining, true);
 
         return ['ok' => true, 'meta' => $remaining];
-    }
-
-    private function statePatch(Agent $actor): array
-    {
-        return $this->buildStatePatch($actor, $this->readJsonBody());
-    }
-
-    private function streamStatePatch(Agent $actor): void
-    {
-        $state = $this->normalizeStatePatchRequest($this->readStatePatchHeader());
-        $lastSignature = '';
-
-        $this->markAgentOnline($actor);
-        register_shutdown_function(function () use ($actor): void {
-            $this->markAgentOffline($actor);
-        });
-
-        ignore_user_abort(true);
-        set_time_limit(0);
-
-        header('Content-Type: text/event-stream; charset=utf-8');
-        header('Cache-Control: no-cache, no-transform');
-        header('X-Accel-Buffering: no');
-
-        while (!connection_aborted()) {
-            $patch = $this->buildStatePatch($actor, $state);
-            $signature = json_encode($patch, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '';
-
-            if ($lastSignature === '' || $signature !== $lastSignature) {
-                $this->sendSseEvent('state_patch', $patch);
-                $lastSignature = $signature;
-            }
-
-            $state = $this->advanceStatePatchState($state, $patch);
-
-            $deadline = time() + 15;
-            while (!connection_aborted() && time() < $deadline) {
-                if ($this->maxZoneUpdateId((string) $actor->zone) > ($state['after_update_id'] ?? 0)) {
-                    break;
-                }
-                $this->sendSseComment('keepalive');
-                usleep(500000);
-            }
-        }
     }
 
     private function createRoute(Agent $actor): array
@@ -2489,86 +2434,6 @@ final class App
         ];
     }
 
-    private function buildStatePatch(Agent $actor, array $requestState): array
-    {
-        $state = $this->normalizeStatePatchRequest($requestState);
-        $knownRouteIds = $state['known_route_ids'];
-        $knownLaneIds = $state['known_lane_ids'];
-        $lanePayloadAfter = $state['lane_payload_after'];
-
-        $currentRoutes = $this->listRoutes($actor);
-        $currentRouteIds = array_map(
-            static fn (array $route): int => (int) $route['route_id'],
-            $currentRoutes
-        );
-
-        $routeDeleteIds = array_values(array_diff($knownRouteIds, $currentRouteIds));
-
-        $lanes = [];
-        foreach ($currentRouteIds as $routeId) {
-            foreach ((new DBList(Lane::class, ['route_id' => $routeId]))->asArray() as $lane) {
-                $lanes[] = $this->serializeLane($lane, $actor);
-            }
-        }
-
-        $currentLaneIds = array_map(
-            static fn (array $lane): int => (int) $lane['lane_id'],
-            $lanes
-        );
-        $laneDeleteIds = array_values(array_diff($knownLaneIds, $currentLaneIds));
-
-        $payloadsByLane = [];
-        foreach ($lanePayloadAfter as $laneId => $afterId) {
-            try {
-                $lane = $this->loadLaneForMember($actor, (string) $laneId);
-            } catch (HttpException) {
-                continue;
-            }
-
-            $payloadsByLane[(string) $laneId] = $this->listPayloadsAfter($lane, $afterId, 200);
-        }
-
-        return [
-            'ok' => true,
-            'after_update_id' => $state['after_update_id'],
-            'latest_update_id' => $this->maxZoneUpdateId((string) $actor->zone),
-            'routes_upsert' => $currentRoutes,
-            'route_delete_ids' => $routeDeleteIds,
-            'lanes_upsert' => $lanes,
-            'lane_delete_ids' => $laneDeleteIds,
-            'payloads_by_lane' => $payloadsByLane,
-        ];
-    }
-
-    /**
-     * @return list<array<string, mixed>>
-     */
-    private function listPayloadsAfter(Lane $lane, int $afterId, int $limit): array
-    {
-        $sql = sprintf(
-            'SELECT id FROM [Payload] WHERE lane_id = ? AND id > ? ORDER BY id ASC LIMIT %d',
-            $limit
-        );
-        $sth = DB::prepare($sql);
-        $sth->execute([(int) $lane->id, $afterId]);
-
-        $items = [];
-        while (($payloadId = $sth->fetchColumn()) !== false) {
-            $items[] = $this->serializePayload(new Payload(['id' => (int) $payloadId]));
-        }
-
-        return $items;
-    }
-
-    private function maxZoneUpdateId(string $zone): int
-    {
-        $sth = DB::prepare('SELECT COALESCE(MAX(id), 0) FROM [UpdateLog] WHERE zone = ?');
-        $sth->execute([$zone]);
-        $value = $sth->fetchColumn();
-
-        return is_numeric($value) ? (int) $value : 0;
-    }
-
     private function readJsonBody(): array
     {
         $raw = file_get_contents('php://input');
@@ -2612,105 +2477,6 @@ final class App
         return $sth->fetchColumn() !== false;
     }
 
-    private function markAgentOnline(Agent $actor): void
-    {
-        $presence = $this->loadAgentPresence($actor);
-        if ($presence === null) {
-            $transaction = TransportTransaction::begin(
-                (string) $actor->zone,
-                (int) $actor->id,
-                [TransportTransaction::OBJECT_PRESENCE]
-            );
-            try {
-                $presence = new AgentPresence();
-                $presence->agent_id = (int) $actor->id;
-                $presence->connection_count = 1;
-                $transaction->write(TransportTransaction::OBJECT_PRESENCE, $presence);
-                $transaction->updateLog('agent_online', [TransportTransaction::OBJECT_PRESENCE], [
-                    'agent_id' => (int) $actor->id,
-                ]);
-                $transaction->commit();
-            } catch (Throwable $error) {
-                $transaction->rollBack();
-                throw $error;
-            }
-
-            return;
-        }
-
-        $this->updateAgentPresenceCount($actor, $presence, (int) $presence->connection_count + 1);
-    }
-
-    private function markAgentOffline(Agent $actor): void
-    {
-        $presence = $this->loadAgentPresence($actor);
-        if ($presence === null) {
-            return;
-        }
-
-        $remaining = max(0, (int) $presence->connection_count - 1);
-        if ($remaining > 0) {
-            $this->updateAgentPresenceCount($actor, $presence, $remaining);
-            return;
-        }
-
-        $transaction = TransportTransaction::begin(
-            (string) $actor->zone,
-            (int) $actor->id,
-            [TransportTransaction::OBJECT_PRESENCE]
-        );
-        try {
-            $transaction->delete(TransportTransaction::OBJECT_PRESENCE, $presence);
-            $transaction->updateLog('agent_offline', [TransportTransaction::OBJECT_PRESENCE], [
-                'agent_id' => (int) $actor->id,
-            ]);
-            $transaction->commit();
-        } catch (Throwable $error) {
-            $transaction->rollBack();
-            throw $error;
-        }
-    }
-
-    private function updateAgentPresenceCount(Agent $actor, AgentPresence $presence, int $connectionCount): void
-    {
-        $transaction = TransportTransaction::begin(
-            (string) $actor->zone,
-            (int) $actor->id,
-            [TransportTransaction::OBJECT_PRESENCE]
-        );
-        try {
-            $presence->connection_count = $connectionCount;
-            $transaction->write(TransportTransaction::OBJECT_PRESENCE, $presence);
-            $transaction->updateLog('agent_presence_updated', [TransportTransaction::OBJECT_PRESENCE], [
-                'agent_id' => (int) $actor->id,
-                'connection_count' => $connectionCount,
-            ]);
-            $transaction->commit();
-        } catch (Throwable $error) {
-            $transaction->rollBack();
-            throw $error;
-        }
-    }
-
-    private function loadAgentPresence(Agent $actor): ?AgentPresence
-    {
-        $list = new DBList(AgentPresence::class, ['agent_id' => (int) $actor->id]);
-        $presence = $list->next();
-
-        return $presence instanceof AgentPresence ? $presence : null;
-    }
-
-    private function readStatePatchHeader(): array
-    {
-        $raw = $_SERVER['HTTP_X_STATE_PATCH'] ?? '';
-        if (!is_string($raw) || trim($raw) === '') {
-            return [];
-        }
-
-        $decoded = json_decode($raw, true);
-        return is_array($decoded) ? $decoded : [];
-    }
-
     private function requiredUuidField(array $payload, string $field): string
     {
         $value = $payload[$field] ?? null;
@@ -2724,122 +2490,6 @@ final class App
         }
 
         return strtolower($value);
-    }
-
-    private function normalizeStatePatchRequest(array $request): array
-    {
-        return [
-            'after_update_id' => max(0, (int) ($request['after_update_id'] ?? 0)),
-            'known_route_ids' => $this->readPositiveIdList($request['known_route_ids'] ?? []),
-            'known_lane_ids' => $this->readPositiveIdList($request['known_lane_ids'] ?? []),
-            'lane_payload_after' => $this->readLanePayloadAfterMap($request['lane_payload_after'] ?? []),
-        ];
-    }
-
-    private function advanceStatePatchState(array $state, array $patch): array
-    {
-        $state['after_update_id'] = max(0, (int) ($patch['latest_update_id'] ?? 0));
-        $state['known_route_ids'] = array_map(
-            static fn (array $route): int => (int) $route['route_id'],
-            $patch['routes_upsert'] ?? []
-        );
-        $state['known_lane_ids'] = array_map(
-            static fn (array $lane): int => (int) $lane['lane_id'],
-            $patch['lanes_upsert'] ?? []
-        );
-
-        $lanePayloadAfter = $state['lane_payload_after'] ?? [];
-        foreach ($patch['lanes_upsert'] ?? [] as $lane) {
-            $laneId = (int) $lane['lane_id'];
-            if (!array_key_exists($laneId, $lanePayloadAfter)) {
-                $lanePayloadAfter[$laneId] = 0;
-            }
-        }
-        foreach ($patch['payloads_by_lane'] ?? [] as $laneId => $payloads) {
-            foreach ($payloads as $payload) {
-                $lanePayloadAfter[(int) $laneId] = max(
-                    (int) ($lanePayloadAfter[(int) $laneId] ?? 0),
-                    (int) ($payload['payload_id'] ?? 0)
-                );
-            }
-        }
-        $state['lane_payload_after'] = $lanePayloadAfter;
-
-        return $state;
-    }
-
-    private function sendSseEvent(string $event, array $payload): void
-    {
-        echo 'event: ' . $event . "\n";
-        echo 'data: ' . json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n\n";
-        @ob_flush();
-        @flush();
-    }
-
-    private function sendSseComment(string $comment): void
-    {
-        echo ': ' . $comment . "\n\n";
-        @ob_flush();
-        @flush();
-    }
-
-    /**
-     * @param mixed $value
-     * @return list<int>
-     */
-    private function readPositiveIdList(mixed $value): array
-    {
-        if (!is_array($value)) {
-            return [];
-        }
-
-        $result = [];
-        foreach ($value as $item) {
-            if (is_int($item) && $item > 0) {
-                $result[] = $item;
-                continue;
-            }
-
-            if (is_string($item) && preg_match('/^[1-9][0-9]*$/', $item)) {
-                $result[] = (int) $item;
-            }
-        }
-
-        return array_values(array_unique($result));
-    }
-
-    /**
-     * @param mixed $value
-     * @return array<int, int>
-     */
-    private function readLanePayloadAfterMap(mixed $value): array
-    {
-        if (!is_array($value)) {
-            return [];
-        }
-
-        $result = [];
-        foreach ($value as $laneId => $afterId) {
-            if (!is_string($laneId) && !is_int($laneId)) {
-                continue;
-            }
-
-            $laneIdString = trim((string) $laneId);
-            if (!preg_match('/^[1-9][0-9]*$/', $laneIdString)) {
-                continue;
-            }
-
-            $after = 0;
-            if (is_int($afterId) && $afterId >= 0) {
-                $after = $afterId;
-            } elseif (is_string($afterId) && preg_match('/^[0-9]+$/', $afterId)) {
-                $after = (int) $afterId;
-            }
-
-            $result[(int) $laneIdString] = $after;
-        }
-
-        return $result;
     }
 
     private function formatDateTime(mixed $value): string

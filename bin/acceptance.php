@@ -67,7 +67,7 @@ final class AcceptanceRunner
             $this->scenarioLanesAndLaneMeta();
             $this->scenarioPayloadsAndReadState();
             $this->scenarioPayloadMeta();
-            $this->scenarioUpdatesAndStatePatch();
+            $this->scenarioUpdates();
             $this->scenarioDestructiveOperations();
         } finally {
             $this->stopServer();
@@ -720,9 +720,9 @@ final class AcceptanceRunner
         $this->assertSame('Payload meta not found', $afterDelete['json']['error'] ?? null, 'payload meta deleted');
     }
 
-    private function scenarioUpdatesAndStatePatch(): void
+    private function scenarioUpdates(): void
     {
-        $this->step('Updates and state patch');
+        $this->step('Updates');
 
         $ordinaryDenied = $this->json('GET', '/updates', null, $this->token('a'));
         $this->assertStatus($ordinaryDenied, 403);
@@ -733,56 +733,9 @@ final class AcceptanceRunner
         $this->assertTrue(count($systemUpdates['json']['items'] ?? []) > 0, 'system sees zone updates');
         $this->context['updates_after']['sys1'] = (int) ($systemUpdates['json']['latest_update_id'] ?? 0);
 
-        $outsiderPatch = $this->json('POST', '/state-patch', [
-            'known_route_ids' => [],
-            'known_lane_ids' => [],
-            'lane_payload_after' => [],
-        ], $this->token('z2user'));
-        $this->assertStatus($outsiderPatch, 200);
-        $this->assertSame([], $outsiderPatch['json']['routes_upsert'] ?? null, 'other zone sees no foreign routes');
-
-        $memberPatch = $this->json('POST', '/state-patch', [
-            'known_route_ids' => [],
-            'known_lane_ids' => [],
-            'lane_payload_after' => [
-                (string) $this->laneId('extra') => 0,
-            ],
-        ], $this->token('b'));
-        $this->assertStatus($memberPatch, 200);
-        $this->assertTrue(count($memberPatch['json']['routes_upsert'] ?? []) >= 1, 'member sees route in state patch');
-        $this->assertTrue(array_key_exists((string) $this->laneId('extra'), $memberPatch['json']['payloads_by_lane'] ?? []), 'payloads_by_lane returned');
-
-        $streamEvent = $this->readSseEvent('/state-patch/stream', $this->token('b'), [
-            'after_update_id' => 0,
-            'known_route_ids' => [],
-            'known_lane_ids' => [],
-            'lane_payload_after' => [],
-        ]);
-        $this->assertSame('state_patch', $streamEvent['event'], 'sse event name');
-        $this->assertTrue(($streamEvent['data']['ok'] ?? false) === true, 'sse patch payload');
-
-        $kinds = [];
-        $presenceUpdates = null;
-        for ($attempt = 0; $attempt < 40; $attempt++) {
-            usleep(500000);
-            $presenceUpdates = $this->json(
-                'GET',
-                '/updates?after_id=' . $this->context['updates_after']['sys1'] . '&limit=500',
-                null,
-                $this->token('sys1')
-            );
-            $this->assertStatus($presenceUpdates, 200);
-            $kinds = array_map(
-                static fn (array $item): string => (string) $item['kind'],
-                $presenceUpdates['json']['items'] ?? []
-            );
-            if (in_array('agent_online', $kinds, true) && in_array('agent_offline', $kinds, true)) {
-                break;
-            }
-        }
-
-        $this->assertTrue(in_array('agent_online', $kinds, true), 'presence online update emitted');
-        $this->assertTrue(in_array('agent_offline', $kinds, true), 'presence offline update emitted');
+        $zone2Updates = $this->json('GET', '/updates?after_id=0&limit=500', null, $this->token('sys2'));
+        $this->assertStatus($zone2Updates, 200);
+        $this->assertSame([], $zone2Updates['json']['items'] ?? null, 'other zone sees no foreign updates');
     }
 
     private function scenarioDestructiveOperations(): void
@@ -999,70 +952,6 @@ final class AcceptanceRunner
             'headers' => $headersOut,
             'body' => $responseBody,
             'json' => $decoded,
-        ];
-    }
-
-    /**
-     * @param array<string, mixed> $state
-     * @return array{event:string,data:array<string,mixed>}
-     */
-    private function readSseEvent(string $path, ?string $token, array $state): array
-    {
-        $headers = [
-            'Accept: text/event-stream',
-            'X-State-Patch: ' . json_encode($state, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
-        ];
-        if ($token !== null) {
-            $headers[] = 'Authorization: Bearer ' . $token;
-        }
-
-        $context = stream_context_create([
-            'http' => [
-                'method' => 'GET',
-                'header' => implode("\r\n", $headers),
-                'ignore_errors' => true,
-                'timeout' => 5,
-            ],
-        ]);
-
-        $stream = @fopen($this->baseUrl . $path, 'r', false, $context);
-        if ($stream === false) {
-            throw new RuntimeException('Failed to open SSE stream ' . $path);
-        }
-
-        stream_set_timeout($stream, 5);
-        $event = '';
-        $data = '';
-        while (!feof($stream)) {
-            $line = fgets($stream);
-            if ($line === false) {
-                break;
-            }
-            $trimmed = rtrim($line, "\r\n");
-            if ($trimmed === '') {
-                if ($event !== '' || $data !== '') {
-                    break;
-                }
-                continue;
-            }
-            if (str_starts_with($trimmed, 'event: ')) {
-                $event = substr($trimmed, 7);
-                continue;
-            }
-            if (str_starts_with($trimmed, 'data: ')) {
-                $data .= substr($trimmed, 6);
-            }
-        }
-        fclose($stream);
-
-        $decoded = json_decode($data, true);
-        if (!is_array($decoded)) {
-            throw new RuntimeException('Invalid SSE JSON payload: ' . $data);
-        }
-
-        return [
-            'event' => $event,
-            'data' => $decoded,
         ];
     }
 

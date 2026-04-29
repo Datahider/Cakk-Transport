@@ -384,44 +384,6 @@ Response:
 }
 ```
 
-## Current online sync
-
-### `POST /state-patch`
-
-Current request shape:
-```json
-{
-  "after_update_id": 0,
-  "known_route_ids": [1, 2],
-  "known_lane_ids": [10, 11],
-  "lane_payload_after": {
-    "10": 42
-  }
-}
-```
-
-Current response shape:
-```json
-{
-  "ok": true,
-  "after_update_id": 0,
-  "latest_update_id": 123,
-  "routes_upsert": [],
-  "route_delete_ids": [],
-  "lanes_upsert": [],
-  "lane_delete_ids": [],
-  "payloads_by_lane": {}
-}
-```
-
-### `GET /state-patch/stream`
-
-Current implementation:
-- SSE endpoint
-- event name: `state_patch`
-- same payload shape as `POST /state-patch`
-- keepalive comments every ~500ms while idle
-
 ## Ideal lazy-updates contract
 
 Ниже не описание текущего кода, а целевая модель, под которую разумно потом подтянуть реализацию.
