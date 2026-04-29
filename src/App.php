@@ -519,6 +519,7 @@ final class App
                 if ($this->maxZoneUpdateId((string) $actor->zone) > ($state['after_update_id'] ?? 0)) {
                     break;
                 }
+                $this->sendSseComment('keepalive');
                 usleep(500000);
             }
         }
@@ -2605,6 +2606,13 @@ final class App
     {
         echo 'event: ' . $event . "\n";
         echo 'data: ' . json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n\n";
+        @ob_flush();
+        @flush();
+    }
+
+    private function sendSseComment(string $comment): void
+    {
+        echo ': ' . $comment . "\n\n";
         @ob_flush();
         @flush();
     }
