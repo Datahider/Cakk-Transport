@@ -365,7 +365,7 @@ Rule:
 ### `GET /updates?after_id=0&limit=100`
 
 Current implementation:
-- доступен только `system`-агенту зоны
+- доступен только `system`-агенту зоны, то есть zone owner / bootstrap agent
 - возвращает zone-wide durable updates
 
 Response:
@@ -392,6 +392,126 @@ Response:
 
 Обычный клиент не читает raw update log.  
 Он синкает только то, что реально показывает пользователю.
+
+Raw updates:
+- `GET /updates?after_id=...` остаётся только для `system`-агента зоны
+- обычный клиент не использует `/updates` как primary sync path
+
+### Target endpoints
+
+Ниже перечислен целевой read-sync API для обычного клиента.
+
+#### `POST /sync/routes/head`
+
+Request:
+```json
+{
+  "limit": 50,
+  "items": [
+    { "id": 101, "revision": "2026-04-29 12:00:00.123456" }
+  ]
+}
+```
+
+Response:
+```json
+{
+  "ok": true,
+  "items": [
+    { "id": 101, "revision": "2026-04-29 12:05:00.123456", "is_deleted": false }
+  ]
+}
+```
+
+#### `POST /sync/routes/full`
+
+Request/response shape:
+- тот же контракт, что у `/sync/routes/head`
+- используется для полного списка route вместо head-окна
+
+#### `POST /sync/routes/{route_id}/lanes/head`
+
+Request:
+```json
+{
+  "limit": 50,
+  "items": [
+    { "id": 501, "revision": "2026-04-29 12:00:00.123456" }
+  ]
+}
+```
+
+Response:
+```json
+{
+  "ok": true,
+  "items": [
+    { "id": 501, "revision": "2026-04-29 12:05:00.123456", "is_deleted": false }
+  ]
+}
+```
+
+#### `POST /sync/routes/{route_id}/lanes/full`
+
+Request/response shape:
+- тот же контракт, что у `/sync/routes/{route_id}/lanes/head`
+- используется для полного списка lane внутри route
+
+#### `POST /sync/lanes/{lane_id}/payloads/tail`
+
+Request:
+```json
+{
+  "limit": 100,
+  "items": [
+    { "id": 9001, "revision": "2026-04-29 12:00:00.123456" }
+  ]
+}
+```
+
+Response:
+```json
+{
+  "ok": true,
+  "items": [
+    { "id": 9001, "revision": "2026-04-29 12:05:00.123456", "is_deleted": false }
+  ]
+}
+```
+
+#### `POST /sync/lanes/{lane_id}/payloads/window`
+
+Request:
+```json
+{
+  "anchor_payload_id": 9001,
+  "before_limit": 50,
+  "after_limit": 50,
+  "items": [
+    { "id": 8998, "revision": "2026-04-29 11:59:00.123456" },
+    { "id": 8999, "revision": "2026-04-29 11:59:30.123456" },
+    { "id": 9000, "revision": "2026-04-29 12:00:00.123456" },
+    { "id": 9001, "revision": "2026-04-29 12:00:30.123456" }
+  ]
+}
+```
+
+Response:
+```json
+{
+  "ok": true,
+  "items": [
+    { "id": 8998, "revision": "2026-04-29 11:59:00.123456", "is_deleted": false },
+    { "id": 9001, "revision": "2026-04-29 12:05:00.123456", "is_deleted": false }
+  ]
+}
+```
+
+#### `GET /payloads/{payload_id}/body`
+
+Назначение:
+- отдельная догрузка raw payload body
+- list/window/tail sync не возвращает body inline
 
 ### List sync
 
