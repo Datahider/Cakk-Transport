@@ -675,18 +675,23 @@ final class App
         $this->assertHasMaxRouteRole($actor, $route);
         $transaction = $this->beginTransportMutation($actor, [
             TransportTransaction::OBJECT_ROUTE,
+            TransportTransaction::OBJECT_ROUTE_META,
             TransportTransaction::OBJECT_SUBSCRIPTION,
             TransportTransaction::OBJECT_LANE,
+            TransportTransaction::OBJECT_LANE_META,
             TransportTransaction::OBJECT_LANE_READ_STATE,
             TransportTransaction::OBJECT_PAYLOAD,
             TransportTransaction::OBJECT_PAYLOAD_META,
         ]);
         try {
             foreach ($this->laneIdsForRoute($route) as $laneId) {
+                $this->deleteLaneMetaForLaneId($transaction, $laneId);
                 $this->deleteLaneReadStatesForLaneId($transaction, $laneId);
                 $this->deletePayloadsForLaneId($transaction, $laneId);
                 $transaction->delete(TransportTransaction::OBJECT_LANE, new Lane(['id' => $laneId]));
             }
+
+            $this->deleteRouteMetaForRouteId($transaction, (int) $route->id);
 
             foreach ((new DBList(Subscription::class, ['route_id' => (int) $route->id]))->asArray() as $subscription) {
                 $transaction->delete(TransportTransaction::OBJECT_SUBSCRIPTION, $subscription);
@@ -695,8 +700,10 @@ final class App
             $transaction->delete(TransportTransaction::OBJECT_ROUTE, $route);
             $transaction->updateLog('route_deleted', [
                 TransportTransaction::OBJECT_ROUTE,
+                TransportTransaction::OBJECT_ROUTE_META,
                 TransportTransaction::OBJECT_SUBSCRIPTION,
                 TransportTransaction::OBJECT_LANE,
+                TransportTransaction::OBJECT_LANE_META,
                 TransportTransaction::OBJECT_LANE_READ_STATE,
                 TransportTransaction::OBJECT_PAYLOAD,
                 TransportTransaction::OBJECT_PAYLOAD_META,
@@ -954,11 +961,13 @@ final class App
         $this->assertHasMaxRouteRole($actor, $route);
         $transaction = $this->beginTransportMutation($actor, [
             TransportTransaction::OBJECT_LANE,
+            TransportTransaction::OBJECT_LANE_META,
             TransportTransaction::OBJECT_LANE_READ_STATE,
             TransportTransaction::OBJECT_PAYLOAD,
             TransportTransaction::OBJECT_PAYLOAD_META,
         ]);
         try {
+            $this->deleteLaneMetaForLaneId($transaction, (int) $lane->id);
             $this->deleteLaneReadStatesForLaneId($transaction, (int) $lane->id);
             $this->deletePayloadsForLaneId($transaction, (int) $lane->id);
             $lane->payload_count = 0;
@@ -967,6 +976,7 @@ final class App
             $transaction->write(TransportTransaction::OBJECT_LANE, $lane);
             $transaction->updateLog('lane_cleared', [
                 TransportTransaction::OBJECT_LANE,
+                TransportTransaction::OBJECT_LANE_META,
                 TransportTransaction::OBJECT_LANE_READ_STATE,
                 TransportTransaction::OBJECT_PAYLOAD,
                 TransportTransaction::OBJECT_PAYLOAD_META,
@@ -1041,16 +1051,19 @@ final class App
         $this->assertHasMaxRouteRole($actor, $route);
         $transaction = $this->beginTransportMutation($actor, [
             TransportTransaction::OBJECT_LANE,
+            TransportTransaction::OBJECT_LANE_META,
             TransportTransaction::OBJECT_LANE_READ_STATE,
             TransportTransaction::OBJECT_PAYLOAD,
             TransportTransaction::OBJECT_PAYLOAD_META,
         ]);
         try {
+            $this->deleteLaneMetaForLaneId($transaction, (int) $lane->id);
             $this->deleteLaneReadStatesForLaneId($transaction, (int) $lane->id);
             $this->deletePayloadsForLaneId($transaction, (int) $lane->id);
-            $transaction->delete(TransportTransaction::OBJECT_LANE, $lane);
+            $transaction->delete(TransportTransaction::OBJECT_LANE, new Lane(['id' => (int) $lane->id]));
             $transaction->updateLog('lane_deleted', [
                 TransportTransaction::OBJECT_LANE,
+                TransportTransaction::OBJECT_LANE_META,
                 TransportTransaction::OBJECT_LANE_READ_STATE,
                 TransportTransaction::OBJECT_PAYLOAD,
                 TransportTransaction::OBJECT_PAYLOAD_META,
@@ -1720,6 +1733,20 @@ final class App
     {
         foreach ((new DBList(LaneReadState::class, ['lane_id' => $laneId]))->asArray() as $readState) {
             $transaction->delete(TransportTransaction::OBJECT_LANE_READ_STATE, $readState);
+        }
+    }
+
+    private function deleteRouteMetaForRouteId(TransportTransaction $transaction, int $routeId): void
+    {
+        foreach ((new DBList(RouteMeta::class, ['route_id' => $routeId]))->asArray() as $routeMeta) {
+            $transaction->delete(TransportTransaction::OBJECT_ROUTE_META, $routeMeta);
+        }
+    }
+
+    private function deleteLaneMetaForLaneId(TransportTransaction $transaction, int $laneId): void
+    {
+        foreach ((new DBList(LaneMeta::class, ['lane_id' => $laneId]))->asArray() as $laneMeta) {
+            $transaction->delete(TransportTransaction::OBJECT_LANE_META, $laneMeta);
         }
     }
 
