@@ -12,9 +12,12 @@ final class PayloadMeta extends DBObject
         'id' => 'BIGINT UNSIGNED NOT NULL AUTO_INCREMENT',
         'payload_id' => 'BIGINT UNSIGNED NOT NULL',
         'agent_id' => 'BIGINT UNSIGNED NOT NULL',
+        'meta_key' => 'VARCHAR(191) NOT NULL',
+        'meta_value' => 'LONGTEXT NOT NULL',
         'created_at' => 'DATETIME NOT NULL',
         'updated_at' => 'DATETIME NOT NULL',
         'PRIMARY KEY' => 'id',
+        'UNIQUE INDEX payload_agent_key' => ['payload_id', 'agent_id', 'meta_key'],
         'INDEX payload_id' => 'payload_id',
         'INDEX agent_id' => 'agent_id',
     ];

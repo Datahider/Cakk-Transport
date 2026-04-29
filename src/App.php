@@ -13,7 +13,6 @@ use CakkTransport\data\LaneMeta;
 use CakkTransport\data\LaneReadState;
 use CakkTransport\data\Payload;
 use CakkTransport\data\PayloadMeta;
-use CakkTransport\data\PayloadMetaField;
 use CakkTransport\data\Route;
 use CakkTransport\data\RouteMeta;
 use CakkTransport\data\Subscription;
@@ -1227,14 +1226,13 @@ final class App
     private function createPayloadMeta(Agent $actor, string $payloadId): array
     {
         $payload = $this->loadReadablePayload($actor, $payloadId);
-        $meta = $this->readMetaFromRequest();
-        if ($meta === []) {
-            $this->error(422, 'meta is required');
-        }
+        [$metaKey, $metaValue] = $this->readSinglePayloadMetaEntry();
 
         $payloadMeta = new PayloadMeta();
         $payloadMeta->payload_id = (int) $payload->id;
         $payloadMeta->agent_id = (int) $actor->id;
+        $payloadMeta->meta_key = $metaKey;
+        $payloadMeta->meta_value = $metaValue;
         $payloadMeta->created_at = new DateTimeImmutable();
         $payloadMeta->updated_at = $payloadMeta->created_at;
         $lane = new Lane(['id' => (int) $payload->lane_id]);
@@ -1242,7 +1240,6 @@ final class App
         $transaction = $this->beginTransportMutation($actor, [TransportTransaction::OBJECT_PAYLOAD_META]);
         try {
             $transaction->write(TransportTransaction::OBJECT_PAYLOAD_META, $payloadMeta);
-            $this->writePayloadMetaData($transaction, $payloadMeta, $meta, true);
             $transaction->updateLog('payload_meta_created', [TransportTransaction::OBJECT_PAYLOAD_META], [
                 'payload_id' => (int) $payload->id,
                 'payload_meta_id' => (int) $payloadMeta->id,
@@ -1277,19 +1274,17 @@ final class App
     private function replacePayloadMeta(Agent $actor, string $payloadMetaId): array
     {
         $payloadMeta = $this->loadWritablePayloadMeta($actor, $payloadMetaId);
-        $meta = $this->readMetaFromRequest();
-        if ($meta === []) {
-            $this->error(422, 'meta is required');
-        }
+        [$metaKey, $metaValue] = $this->readSinglePayloadMetaEntry();
 
         $payload = new Payload(['id' => (int) $payloadMeta->payload_id]);
         $lane = new Lane(['id' => (int) $payload->lane_id]);
         $route = new Route(['id' => (int) $lane->route_id]);
+        $payloadMeta->meta_key = $metaKey;
+        $payloadMeta->meta_value = $metaValue;
         $payloadMeta->updated_at = new DateTimeImmutable();
         $transaction = $this->beginTransportMutation($actor, [TransportTransaction::OBJECT_PAYLOAD_META]);
         try {
             $transaction->write(TransportTransaction::OBJECT_PAYLOAD_META, $payloadMeta);
-            $this->writePayloadMetaData($transaction, $payloadMeta, $meta, true);
             $transaction->updateLog('payload_meta_updated', [TransportTransaction::OBJECT_PAYLOAD_META], [
                 'payload_meta_id' => (int) $payloadMeta->id,
                 'payload_id' => (int) $payload->id,
@@ -1314,20 +1309,17 @@ final class App
     private function patchPayloadMeta(Agent $actor, string $payloadMetaId): array
     {
         $payloadMeta = $this->loadWritablePayloadMeta($actor, $payloadMetaId);
-        $patch = $this->readMetaFromRequest();
-        if ($patch === []) {
-            $this->error(422, 'meta is required');
-        }
+        [$metaKey, $metaValue] = $this->readSinglePayloadMetaEntry();
 
-        $meta = array_replace($this->loadPayloadMetaData($payloadMeta), $patch);
         $payload = new Payload(['id' => (int) $payloadMeta->payload_id]);
         $lane = new Lane(['id' => (int) $payload->lane_id]);
         $route = new Route(['id' => (int) $lane->route_id]);
+        $payloadMeta->meta_key = $metaKey;
+        $payloadMeta->meta_value = $metaValue;
         $payloadMeta->updated_at = new DateTimeImmutable();
         $transaction = $this->beginTransportMutation($actor, [TransportTransaction::OBJECT_PAYLOAD_META]);
         try {
             $transaction->write(TransportTransaction::OBJECT_PAYLOAD_META, $payloadMeta);
-            $this->writePayloadMetaData($transaction, $payloadMeta, $meta, true);
             $transaction->updateLog('payload_meta_updated', [TransportTransaction::OBJECT_PAYLOAD_META], [
                 'payload_meta_id' => (int) $payloadMeta->id,
                 'payload_id' => (int) $payload->id,
@@ -1361,7 +1353,6 @@ final class App
         $routeIdInt = (int) $route->id;
         $transaction = $this->beginTransportMutation($actor, [TransportTransaction::OBJECT_PAYLOAD_META]);
         try {
-            $this->deletePayloadMetaFields($transaction, $payloadMetaIdInt);
             $transaction->delete(TransportTransaction::OBJECT_PAYLOAD_META, $payloadMeta);
             $transaction->updateLog('payload_meta_deleted', [TransportTransaction::OBJECT_PAYLOAD_META], [
                 'payload_meta_id' => $payloadMetaIdInt,
@@ -1603,16 +1594,6 @@ final class App
         return $meta;
     }
 
-    private function loadPayloadMetaData(PayloadMeta $payloadMeta): array
-    {
-        $meta = [];
-        foreach ((new DBList(PayloadMetaField::class, ['payload_meta_id' => (int) $payloadMeta->id]))->asArray() as $record) {
-            $meta[(string) $record->meta_key] = (string) $record->meta_value;
-        }
-
-        return $meta;
-    }
-
     private function writeAgentMeta(Agent $actor, array $meta, bool $replaceAll): void
     {
         $transaction = $this->beginTransportMutation($actor, [TransportTransaction::OBJECT_AGENT_META]);
@@ -1670,18 +1651,6 @@ final class App
             $transaction->rollBack();
             throw $error;
         }
-    }
-
-    private function writePayloadMetaData(
-        TransportTransaction $transaction,
-        PayloadMeta $payloadMeta,
-        array $meta,
-        bool $replaceAll,
-    ): void {
-        $this->syncMetaRecords($transaction, PayloadMetaField::class, ['payload_meta_id' => (int) $payloadMeta->id], 'meta_key', 'meta_value', $meta, $replaceAll, [
-            'payload_meta_id' => (int) $payloadMeta->id,
-            'updated_at' => $payloadMeta->updated_at,
-        ]);
     }
 
     private function assertPayloadBelongsToLane(Lane $lane, int $payloadId): void
@@ -1753,15 +1722,7 @@ final class App
     private function deletePayloadMetaForPayloadId(TransportTransaction $transaction, int $payloadId): void
     {
         foreach ((new DBList(PayloadMeta::class, ['payload_id' => $payloadId]))->asArray() as $payloadMeta) {
-            $this->deletePayloadMetaFields($transaction, (int) $payloadMeta->id);
             $transaction->delete(TransportTransaction::OBJECT_PAYLOAD_META, $payloadMeta);
-        }
-    }
-
-    private function deletePayloadMetaFields(TransportTransaction $transaction, int $payloadMetaId): void
-    {
-        foreach ((new DBList(PayloadMetaField::class, ['payload_meta_id' => $payloadMetaId]))->asArray() as $payloadMetaField) {
-            $transaction->delete(TransportTransaction::OBJECT_PAYLOAD_META, $payloadMetaField);
         }
     }
 
@@ -2261,7 +2222,6 @@ final class App
             AgentMeta::class => TransportTransaction::OBJECT_AGENT_META,
             RouteMeta::class => TransportTransaction::OBJECT_ROUTE_META,
             LaneMeta::class => TransportTransaction::OBJECT_LANE_META,
-            PayloadMetaField::class => TransportTransaction::OBJECT_PAYLOAD_META,
             default => throw new Exception('Unsupported meta class'),
         };
     }
@@ -2343,10 +2303,30 @@ final class App
             'payload_meta_id' => (int) $payloadMeta->id,
             'payload_id' => (int) $payloadMeta->payload_id,
             'agent_id' => (int) $author->id,
-            'meta' => $this->loadPayloadMetaData($payloadMeta),
+            'meta' => [
+                (string) $payloadMeta->meta_key => (string) $payloadMeta->meta_value,
+            ],
             'created_at' => $this->formatDateTime($payloadMeta->created_at),
             'updated_at' => $this->formatDateTime($payloadMeta->updated_at),
         ];
+    }
+
+    /**
+     * @return array{0:string,1:string}
+     */
+    private function readSinglePayloadMetaEntry(): array
+    {
+        $meta = $this->readMetaFromRequest();
+        if ($meta === []) {
+            $this->error(422, 'meta is required');
+        }
+        if (count($meta) !== 1) {
+            $this->error(422, 'payload meta record must contain exactly one meta entry');
+        }
+
+        $metaKey = (string) array_key_first($meta);
+
+        return [$metaKey, (string) $meta[$metaKey]];
     }
 
     private function serializeUpdate(UpdateLog $update): array

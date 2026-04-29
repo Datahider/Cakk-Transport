@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 use CakkTransport\data\Payload;
 use CakkTransport\data\PayloadMeta;
-use CakkTransport\data\PayloadMetaField;
 use CakkTransport\data\Lane;
 use CakkTransport\data\LaneMeta;
 use CakkTransport\data\LaneReadState;
@@ -41,5 +40,4 @@ LaneMeta::initDataStructure();
 LaneReadState::initDataStructure();
 Payload::initDataStructure();
 PayloadMeta::initDataStructure();
-PayloadMetaField::initDataStructure();
 UpdateLog::initDataStructure();

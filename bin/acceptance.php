@@ -11,7 +11,6 @@ use CakkTransport\data\LaneMeta;
 use CakkTransport\data\LaneReadState;
 use CakkTransport\data\Payload;
 use CakkTransport\data\PayloadMeta;
-use CakkTransport\data\PayloadMetaField;
 use CakkTransport\data\Route;
 use CakkTransport\data\RouteMeta;
 use CakkTransport\data\Subscription;
@@ -646,8 +645,18 @@ final class AcceptanceRunner
         $this->assertStatus($emptyMeta, 422);
         $this->assertSame('meta is required', $emptyMeta['json']['error'] ?? null, 'payload meta requires data');
 
-        $create = $this->json('POST', '/payloads/' . $targetPayload . '/meta', [
+        $multiEntry = $this->json('POST', '/payloads/' . $targetPayload . '/meta', [
             'meta' => ['reaction' => 'like', 'color' => 'blue'],
+        ], $this->token('a'));
+        $this->assertStatus($multiEntry, 422);
+        $this->assertSame(
+            'payload meta record must contain exactly one meta entry',
+            $multiEntry['json']['error'] ?? null,
+            'payload meta create requires single entry'
+        );
+
+        $create = $this->json('POST', '/payloads/' . $targetPayload . '/meta', [
+            'meta' => ['reaction' => 'like'],
         ], $this->token('b'));
         $this->assertStatus($create, 200);
         $this->rememberPayloadMeta('b_reaction', $create);
@@ -802,7 +811,6 @@ final class AcceptanceRunner
         LaneReadState::initDataStructure();
         Payload::initDataStructure();
         PayloadMeta::initDataStructure();
-        PayloadMetaField::initDataStructure();
         UpdateLog::initDataStructure();
 
         $this->assertTrue(true, 'schema reset complete');
