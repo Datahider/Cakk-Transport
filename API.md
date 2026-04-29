@@ -384,9 +384,7 @@ Response:
 }
 ```
 
-## Ideal lazy-updates contract
-
-Ниже не описание текущего кода, а целевая модель, под которую разумно потом подтянуть реализацию.
+## Lazy sync contract
 
 ### Goal
 
@@ -397,9 +395,9 @@ Raw updates:
 - `GET /updates?after_id=...` остаётся только для `system`-агента зоны
 - обычный клиент не использует `/updates` как primary sync path
 
-### Target endpoints
+### Endpoints
 
-Ниже перечислен целевой read-sync API для обычного клиента.
+Ниже перечислен текущий read-sync API для обычного клиента.
 
 #### `POST /sync/routes`
 
@@ -474,7 +472,7 @@ Response:
 
 Назначение:
 - отдельная догрузка raw payload body
-- list/window/tail sync не возвращает body inline
+- sync endpoint-ы не возвращают body inline
 
 ### List sync
 
@@ -511,7 +509,7 @@ Payload sync использует тот же контракт `skip/limit/items
 
 Тогда клиент может убрать его из локального кэша без отдельного delete-event.
 
-### Why this is the target
+### Why this contract
 
 Такой контракт:
 - не требует per-agent update queues
