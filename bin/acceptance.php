@@ -743,74 +743,91 @@ final class AcceptanceRunner
     {
         $this->step('Ideal lazy sync contract');
 
-        $routesHead = $this->json('POST', '/sync/routes/head', [
+        $routesSync = $this->json('POST', '/sync/routes', [
+            'skip' => 0,
             'limit' => 50,
             'items' => [],
         ], $this->token('b'));
-        $this->assertStatus($routesHead, 200);
-        $this->assertLazySyncItems($routesHead, 'routes head');
-        $routeSnapshot = $this->toLazySyncSnapshot($routesHead);
+        $this->assertStatus($routesSync, 200);
+        $this->assertLazySyncItems($routesSync, 'routes bootstrap');
+        $routeSnapshot = $this->toLazySyncSnapshot($routesSync);
 
-        $routesFull = $this->json('POST', '/sync/routes/full', [
+        $routesStable = $this->json('POST', '/sync/routes', [
+            'skip' => 0,
             'limit' => 50,
             'items' => $routeSnapshot,
         ], $this->token('b'));
-        $this->assertStatus($routesFull, 200);
-        $this->assertSame([], $routesFull['json']['items'] ?? null, 'routes full skips matching revisions');
+        $this->assertStatus($routesStable, 200);
+        $this->assertSame([], $routesStable['json']['items'] ?? null, 'routes sync skips matching revisions');
 
         $routeMetaSync = $this->json('POST', '/routes/' . $this->routeId('main') . '/meta', [
             'meta' => ['sync_title' => 'Main route sync'],
         ], $this->token('a'));
         $this->assertStatus($routeMetaSync, 200);
 
-        $routesFullChanged = $this->json('POST', '/sync/routes/full', [
+        $routesChanged = $this->json('POST', '/sync/routes', [
+            'skip' => 0,
             'limit' => 50,
             'items' => $routeSnapshot,
         ], $this->token('b'));
-        $this->assertStatus($routesFullChanged, 200);
-        $this->assertLazySyncItems($routesFullChanged, 'routes full changed');
+        $this->assertStatus($routesChanged, 200);
+        $this->assertLazySyncItems($routesChanged, 'routes changed');
 
-        $lanesHead = $this->json('POST', '/sync/routes/' . $this->routeId('main') . '/lanes/head', [
+        $lanesSync = $this->json('POST', '/sync/routes/' . $this->routeId('main') . '/lanes', [
+            'skip' => 0,
             'limit' => 50,
             'items' => [],
         ], $this->token('b'));
-        $this->assertStatus($lanesHead, 200);
-        $this->assertLazySyncItems($lanesHead, 'lanes head');
-        $laneSnapshot = $this->toLazySyncSnapshot($lanesHead);
+        $this->assertStatus($lanesSync, 200);
+        $this->assertLazySyncItems($lanesSync, 'lanes bootstrap');
+        $laneSnapshot = $this->toLazySyncSnapshot($lanesSync);
 
-        $lanesFull = $this->json('POST', '/sync/routes/' . $this->routeId('main') . '/lanes/full', [
+        $lanesSkip = $this->json('POST', '/sync/routes/' . $this->routeId('main') . '/lanes', [
+            'skip' => 1,
+            'limit' => 1,
+            'items' => [],
+        ], $this->token('b'));
+        $this->assertStatus($lanesSkip, 200);
+        $this->assertLazySyncItems($lanesSkip, 'lanes skipped slice');
+        $this->assertSame(1, count($lanesSkip['json']['items'] ?? []), 'lanes skip limit respected');
+
+        $lanesStable = $this->json('POST', '/sync/routes/' . $this->routeId('main') . '/lanes', [
+            'skip' => 0,
             'limit' => 50,
             'items' => $laneSnapshot,
         ], $this->token('b'));
-        $this->assertStatus($lanesFull, 200);
-        $this->assertSame([], $lanesFull['json']['items'] ?? null, 'lanes full skips matching revisions');
+        $this->assertStatus($lanesStable, 200);
+        $this->assertSame([], $lanesStable['json']['items'] ?? null, 'lanes sync skips matching revisions');
 
         $laneMetaSync = $this->json('POST', '/lanes/' . $this->laneId('extra') . '/meta', [
             'meta' => ['sync_lane' => 'Extra lane sync'],
         ], $this->token('a'));
         $this->assertStatus($laneMetaSync, 200);
 
-        $lanesFullChanged = $this->json('POST', '/sync/routes/' . $this->routeId('main') . '/lanes/full', [
+        $lanesChanged = $this->json('POST', '/sync/routes/' . $this->routeId('main') . '/lanes', [
+            'skip' => 0,
             'limit' => 50,
             'items' => $laneSnapshot,
         ], $this->token('b'));
-        $this->assertStatus($lanesFullChanged, 200);
-        $this->assertLazySyncItems($lanesFullChanged, 'lanes full changed');
+        $this->assertStatus($lanesChanged, 200);
+        $this->assertLazySyncItems($lanesChanged, 'lanes changed');
 
-        $payloadTail = $this->json('POST', '/sync/lanes/' . $this->laneId('extra') . '/payloads/tail', [
+        $payloadSync = $this->json('POST', '/sync/lanes/' . $this->laneId('extra') . '/payloads', [
+            'skip' => 0,
             'limit' => 100,
             'items' => [],
         ], $this->token('b'));
-        $this->assertStatus($payloadTail, 200);
-        $this->assertLazySyncItems($payloadTail, 'payload tail');
-        $payloadSnapshot = $this->toLazySyncSnapshot($payloadTail);
+        $this->assertStatus($payloadSync, 200);
+        $this->assertLazySyncItems($payloadSync, 'payload bootstrap');
+        $payloadSnapshot = $this->toLazySyncSnapshot($payloadSync);
 
-        $payloadTailStable = $this->json('POST', '/sync/lanes/' . $this->laneId('extra') . '/payloads/tail', [
+        $payloadStable = $this->json('POST', '/sync/lanes/' . $this->laneId('extra') . '/payloads', [
+            'skip' => 0,
             'limit' => 100,
             'items' => $payloadSnapshot,
         ], $this->token('b'));
-        $this->assertStatus($payloadTailStable, 200);
-        $this->assertSame([], $payloadTailStable['json']['items'] ?? null, 'payload tail skips matching revisions');
+        $this->assertStatus($payloadStable, 200);
+        $this->assertSame([], $payloadStable['json']['items'] ?? null, 'payload sync skips matching revisions');
 
         $payloadExtra2 = $this->raw(
             'POST',
@@ -821,21 +838,22 @@ final class AcceptanceRunner
         );
         $this->assertStatus($payloadExtra2, 200);
 
-        $payloadTailChanged = $this->json('POST', '/sync/lanes/' . $this->laneId('extra') . '/payloads/tail', [
+        $payloadChanged = $this->json('POST', '/sync/lanes/' . $this->laneId('extra') . '/payloads', [
+            'skip' => 0,
             'limit' => 100,
             'items' => $payloadSnapshot,
         ], $this->token('b'));
-        $this->assertStatus($payloadTailChanged, 200);
-        $this->assertLazySyncItems($payloadTailChanged, 'payload tail changed');
+        $this->assertStatus($payloadChanged, 200);
+        $this->assertLazySyncItems($payloadChanged, 'payload changed');
 
-        $payloadWindowStable = $this->json('POST', '/sync/lanes/' . $this->laneId('extra') . '/payloads/window', [
-            'anchor_payload_id' => $this->payloadId('extra1'),
-            'before_limit' => 50,
-            'after_limit' => 50,
-            'items' => $payloadSnapshot,
+        $payloadSkip = $this->json('POST', '/sync/lanes/' . $this->laneId('extra') . '/payloads', [
+            'skip' => 1,
+            'limit' => 1,
+            'items' => [],
         ], $this->token('b'));
-        $this->assertStatus($payloadWindowStable, 200);
-        $this->assertLazySyncItems($payloadWindowStable, 'payload window changed');
+        $this->assertStatus($payloadSkip, 200);
+        $this->assertLazySyncItems($payloadSkip, 'payload skipped slice');
+        $this->assertSame(1, count($payloadSkip['json']['items'] ?? []), 'payload skip limit respected');
     }
 
     private function scenarioDestructiveOperations(): void

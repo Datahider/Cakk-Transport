@@ -401,11 +401,12 @@ Raw updates:
 
 Ниже перечислен целевой read-sync API для обычного клиента.
 
-#### `POST /sync/routes/head`
+#### `POST /sync/routes`
 
 Request:
 ```json
 {
+  "skip": 0,
   "limit": 50,
   "items": [
     { "id": 101, "revision": "2026-04-29 12:00:00.123456" }
@@ -423,17 +424,12 @@ Response:
 }
 ```
 
-#### `POST /sync/routes/full`
-
-Request/response shape:
-- тот же контракт, что у `/sync/routes/head`
-- используется для полного списка route вместо head-окна
-
-#### `POST /sync/routes/{route_id}/lanes/head`
+#### `POST /sync/routes/{route_id}/lanes`
 
 Request:
 ```json
 {
+  "skip": 0,
   "limit": 50,
   "items": [
     { "id": 501, "revision": "2026-04-29 12:00:00.123456" }
@@ -451,18 +447,13 @@ Response:
 }
 ```
 
-#### `POST /sync/routes/{route_id}/lanes/full`
-
-Request/response shape:
-- тот же контракт, что у `/sync/routes/{route_id}/lanes/head`
-- используется для полного списка lane внутри route
-
-#### `POST /sync/lanes/{lane_id}/payloads/tail`
+#### `POST /sync/lanes/{lane_id}/payloads`
 
 Request:
 ```json
 {
-  "limit": 100,
+  "skip": 20,
+  "limit": 50,
   "items": [
     { "id": 9001, "revision": "2026-04-29 12:00:00.123456" }
   ]
@@ -479,34 +470,6 @@ Response:
 }
 ```
 
-#### `POST /sync/lanes/{lane_id}/payloads/window`
-
-Request:
-```json
-{
-  "anchor_payload_id": 9001,
-  "before_limit": 50,
-  "after_limit": 50,
-  "items": [
-    { "id": 8998, "revision": "2026-04-29 11:59:00.123456" },
-    { "id": 8999, "revision": "2026-04-29 11:59:30.123456" },
-    { "id": 9000, "revision": "2026-04-29 12:00:00.123456" },
-    { "id": 9001, "revision": "2026-04-29 12:00:30.123456" }
-  ]
-}
-```
-
-Response:
-```json
-{
-  "ok": true,
-  "items": [
-    { "id": 8998, "revision": "2026-04-29 11:59:00.123456", "is_deleted": false },
-    { "id": 9001, "revision": "2026-04-29 12:05:00.123456", "is_deleted": false }
-  ]
-}
-```
-
 #### `GET /payloads/{payload_id}/body`
 
 Назначение:
@@ -515,31 +478,25 @@ Response:
 
 ### List sync
 
-Для больших списков достаточно head-sync.
-
-`routes head`:
-- клиент хранит кэш верхних `N` route
-- клиент шлёт список `[{id, revision}, ...]` только для head-окна
-- сервер берёт свои top `N` route по `revision desc, id desc`
+Для `routes`, `lanes` и `payloads` используется один и тот же алгоритм:
+- клиент шлёт `skip`, `limit` и свой локальный список `[{id, revision}, ...]`
+- сервер берёт текущее окно по `skip/limit`, упорядоченное по `revision desc, id desc`
 - сервер выкидывает совпадающие `id+revision`
 - по остальным отдаёт:
   - `id`
   - `revision`
   - `is_deleted`
 
-`full`:
-- тот же алгоритм
-- но не по top `N`, а по всему списку
-- используется редко, когда пользователь реально доскроллил до края локального кэша
-
-То же самое для `lanes`.
+Важная семантика:
+- ответ не является авторитативным составом окна
+- если объект не вернулся в `items`, это не гарантирует, что он всё ещё входит в текущий slice сервера
+- контракт означает только: "дай отсутствующие или изменившиеся элементы из этого диапазона"
+- если клиенту нужен более точный снимок, он повторно запрашивает нужный диапазон, например `skip=0`
 
 ### Payload sync
 
-Для payload лучше lazy window, а не full lane sync.
-
-Базовый вариант:
-- клиент запрашивает window или tail видимого lane
+Payload sync использует тот же контракт `skip/limit/items`.
+- клиент запрашивает только тот диапазон lane, который ему сейчас нужен
 - сервер отдаёт только `payload_id + revision + is_deleted`
 - body клиент догружает отдельно через `GET /payloads/{id}/body`
 
@@ -549,7 +506,7 @@ Response:
 - объект не исчезает сразу физически
 - получает новую `revision`
 - помечается `is_deleted = true`
-- и попадает в head/full response
+- и попадает в sync response своего диапазона
 
 Тогда клиент может убрать его из локального кэша без отдельного delete-event.
 

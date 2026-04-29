@@ -87,28 +87,18 @@ final class App
                 return;
             }
 
-            if ($method === 'POST' && $path === '/sync/routes/head') {
-                $this->respond($this->syncRoutes($actor, true));
+            if ($method === 'POST' && $path === '/sync/routes') {
+                $this->respond($this->syncRoutes($actor));
                 return;
             }
 
-            if ($method === 'POST' && $path === '/sync/routes/full') {
-                $this->respond($this->syncRoutes($actor, false));
+            if (preg_match('#^/sync/routes/([^/]+)/lanes$#', $path, $matches) === 1 && $method === 'POST') {
+                $this->respond($this->syncRouteLanes($actor, rawurldecode($matches[1])));
                 return;
             }
 
-            if (preg_match('#^/sync/routes/([^/]+)/lanes/(head|full)$#', $path, $matches) === 1 && $method === 'POST') {
-                $this->respond($this->syncRouteLanes($actor, rawurldecode($matches[1]), $matches[2] === 'head'));
-                return;
-            }
-
-            if (preg_match('#^/sync/lanes/([^/]+)/payloads/(tail|window)$#', $path, $matches) === 1 && $method === 'POST') {
-                $lanePublicId = rawurldecode($matches[1]);
-                if ($matches[2] === 'tail') {
-                    $this->respond($this->syncLanePayloadTail($actor, $lanePublicId));
-                    return;
-                }
-                $this->respond($this->syncLanePayloadWindow($actor, $lanePublicId));
+            if (preg_match('#^/sync/lanes/([^/]+)/payloads$#', $path, $matches) === 1 && $method === 'POST') {
+                $this->respond($this->syncLanePayloads($actor, rawurldecode($matches[1])));
                 return;
             }
 
@@ -444,61 +434,42 @@ final class App
         ];
     }
 
-    private function syncRoutes(Agent $actor, bool $headOnly): array
+    private function syncRoutes(Agent $actor): array
     {
-        $request = $this->readLazySyncListRequest();
+        $request = $this->readLazySyncRequest();
 
         return [
             'ok' => true,
             'items' => $this->filterLazySyncItems(
-                $this->loadRouteSyncItems($actor, $request['limit'], $headOnly),
+                $this->loadRouteSyncItems($actor, $request['skip'], $request['limit']),
                 $request['items']
             ),
         ];
     }
 
-    private function syncRouteLanes(Agent $actor, string $routePublicId, bool $headOnly): array
+    private function syncRouteLanes(Agent $actor, string $routePublicId): array
     {
         $route = $this->loadRouteForMember($actor, $routePublicId);
-        $request = $this->readLazySyncListRequest();
+        $request = $this->readLazySyncRequest();
 
         return [
             'ok' => true,
             'items' => $this->filterLazySyncItems(
-                $this->loadLaneSyncItems($route, $request['limit'], $headOnly),
+                $this->loadLaneSyncItems($route, $request['skip'], $request['limit']),
                 $request['items']
             ),
         ];
     }
 
-    private function syncLanePayloadTail(Agent $actor, string $lanePublicId): array
+    private function syncLanePayloads(Agent $actor, string $lanePublicId): array
     {
         $lane = $this->loadLaneForMember($actor, $lanePublicId);
-        $request = $this->readLazySyncListRequest();
+        $request = $this->readLazySyncRequest();
 
         return [
             'ok' => true,
             'items' => $this->filterLazySyncItems(
-                $this->loadPayloadTailSyncItems($lane, $request['limit']),
-                $request['items']
-            ),
-        ];
-    }
-
-    private function syncLanePayloadWindow(Agent $actor, string $lanePublicId): array
-    {
-        $lane = $this->loadLaneForMember($actor, $lanePublicId);
-        $request = $this->readLazySyncWindowRequest();
-
-        return [
-            'ok' => true,
-            'items' => $this->filterLazySyncItems(
-                $this->loadPayloadWindowSyncItems(
-                    $lane,
-                    $request['anchor_payload_id'],
-                    $request['before_limit'],
-                    $request['after_limit']
-                ),
+                $this->loadPayloadSyncItems($lane, $request['skip'], $request['limit']),
                 $request['items']
             ),
         ];
@@ -2596,41 +2567,40 @@ final class App
     }
 
     /**
-     * @return array{limit:int,items:array<int, string>}
+     * @return array{skip:int,limit:int,items:array<int, string>}
      */
-    private function readLazySyncListRequest(): array
+    private function readLazySyncRequest(): array
     {
         $payload = $this->readJsonBody();
 
         return [
+            'skip' => $this->readLazySyncSkip($payload['skip'] ?? 0),
             'limit' => $this->readLazySyncLimit($payload['limit'] ?? 100, 'limit'),
             'items' => $this->readLazySyncSnapshotItems($payload['items'] ?? []),
         ];
     }
 
-    /**
-     * @return array{anchor_payload_id:int,before_limit:int,after_limit:int,items:array<int, string>}
-     */
-    private function readLazySyncWindowRequest(): array
+    private function readLazySyncSkip(mixed $value): int
     {
-        $payload = $this->readJsonBody();
+        if (is_int($value) && $value >= 0) {
+            return $value;
+        }
 
-        return [
-            'anchor_payload_id' => $this->requiredPositiveIntField($payload, 'anchor_payload_id'),
-            'before_limit' => $this->readLazySyncLimit($payload['before_limit'] ?? 50, 'before_limit'),
-            'after_limit' => $this->readLazySyncLimit($payload['after_limit'] ?? 50, 'after_limit'),
-            'items' => $this->readLazySyncSnapshotItems($payload['items'] ?? []),
-        ];
+        if (is_string($value) && preg_match('/^(0|[1-9][0-9]*)$/', $value)) {
+            return (int) $value;
+        }
+
+        $this->error(422, 'skip must be a non-negative integer');
     }
 
     private function readLazySyncLimit(mixed $value, string $field): int
     {
         if (is_int($value) && $value > 0) {
-            return min($value, 500);
+            return $value;
         }
 
         if (is_string($value) && preg_match('/^[1-9][0-9]*$/', $value)) {
-            return min((int) $value, 500);
+            return (int) $value;
         }
 
         $this->error(422, sprintf('%s must be a positive integer', $field));
@@ -2680,15 +2650,13 @@ final class App
     /**
      * @return list<array{id:int,revision:string,is_deleted:bool}>
      */
-    private function loadRouteSyncItems(Agent $actor, int $limit, bool $headOnly): array
+    private function loadRouteSyncItems(Agent $actor, int $skip, int $limit): array
     {
-        $sql = 'SELECT r.id, r.revision FROM [Route] r
+        $sql = sprintf('SELECT r.id, r.revision FROM [Route] r
             INNER JOIN [Subscription] s ON s.route_id = r.id
             WHERE s.agent_id = ?
-            ORDER BY r.revision DESC, r.id DESC';
-        if ($headOnly) {
-            $sql .= sprintf(' LIMIT %d', $limit);
-        }
+            ORDER BY r.revision DESC, r.id DESC
+            LIMIT %d OFFSET %d', $limit, $skip);
 
         $sth = DB::prepare($sql);
         $sth->execute([(int) $actor->id]);
@@ -2708,12 +2676,13 @@ final class App
     /**
      * @return list<array{id:int,revision:string,is_deleted:bool}>
      */
-    private function loadLaneSyncItems(Route $route, int $limit, bool $headOnly): array
+    private function loadLaneSyncItems(Route $route, int $skip, int $limit): array
     {
-        $sql = 'SELECT id, revision FROM [Lane] WHERE route_id = ? ORDER BY revision DESC, id DESC';
-        if ($headOnly) {
-            $sql .= sprintf(' LIMIT %d', $limit);
-        }
+        $sql = sprintf(
+            'SELECT id, revision FROM [Lane] WHERE route_id = ? ORDER BY revision DESC, id DESC LIMIT %d OFFSET %d',
+            $limit,
+            $skip
+        );
 
         $sth = DB::prepare($sql);
         $sth->execute([(int) $route->id]);
@@ -2733,11 +2702,12 @@ final class App
     /**
      * @return list<array{id:int,revision:string,is_deleted:bool}>
      */
-    private function loadPayloadTailSyncItems(Lane $lane, int $limit): array
+    private function loadPayloadSyncItems(Lane $lane, int $skip, int $limit): array
     {
         $sth = DB::prepare(sprintf(
-            'SELECT id, revision FROM [Payload] WHERE lane_id = ? ORDER BY revision DESC, id DESC LIMIT %d',
-            $limit
+            'SELECT id, revision FROM [Payload] WHERE lane_id = ? ORDER BY revision DESC, id DESC LIMIT %d OFFSET %d',
+            $limit,
+            $skip
         ));
         $sth->execute([(int) $lane->id]);
 
@@ -2752,51 +2722,6 @@ final class App
 
         return $items;
     }
-
-    /**
-     * @return list<array{id:int,revision:string,is_deleted:bool}>
-     */
-    private function loadPayloadWindowSyncItems(
-        Lane $lane,
-        int $anchorPayloadId,
-        int $beforeLimit,
-        int $afterLimit,
-    ): array {
-        $this->assertPayloadBelongsToLane($lane, $anchorPayloadId);
-
-        $itemsById = [];
-
-        $beforeSth = DB::prepare(sprintf(
-            'SELECT id, revision FROM [Payload] WHERE lane_id = ? AND id <= ? ORDER BY id DESC LIMIT %d',
-            $beforeLimit + 1
-        ));
-        $beforeSth->execute([(int) $lane->id, $anchorPayloadId]);
-        while ($row = $beforeSth->fetch(\PDO::FETCH_ASSOC)) {
-            $itemsById[(int) $row['id']] = [
-                'id' => (int) $row['id'],
-                'revision' => $this->formatDateTime($row['revision']),
-                'is_deleted' => false,
-            ];
-        }
-
-        $afterSth = DB::prepare(sprintf(
-            'SELECT id, revision FROM [Payload] WHERE lane_id = ? AND id > ? ORDER BY id ASC LIMIT %d',
-            $afterLimit
-        ));
-        $afterSth->execute([(int) $lane->id, $anchorPayloadId]);
-        while ($row = $afterSth->fetch(\PDO::FETCH_ASSOC)) {
-            $itemsById[(int) $row['id']] = [
-                'id' => (int) $row['id'],
-                'revision' => $this->formatDateTime($row['revision']),
-                'is_deleted' => false,
-            ];
-        }
-
-        ksort($itemsById);
-
-        return array_values($itemsById);
-    }
-
     private function formatDateTime(mixed $value): string
     {
         if ($value instanceof \DateTimeInterface) {
