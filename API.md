@@ -502,11 +502,12 @@ Payload sync использует тот же контракт `skip/limit/items
 
 ### Deletions
 
-Для list sync желательно soft-delete:
+Для sync используется soft-delete:
 - объект не исчезает сразу физически
 - получает новую `revision`
 - помечается `is_deleted = true`
 - и попадает в sync response своего диапазона
+- обычные read endpoint-ы после этого считают его отсутствующим
 
 Тогда клиент может убрать его из локального кэша без отдельного delete-event.
 

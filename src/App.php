@@ -552,6 +552,7 @@ final class App
             $route = new Route();
             $route->zone = (string) $actor->zone;
             $route->owner_agent_id = $systemOwned ? null : (int) $actor->id;
+            $route->is_deleted = false;
             $transaction->write(TransportTransaction::OBJECT_ROUTE, $route);
 
             $membership = new Subscription();
@@ -673,41 +674,11 @@ final class App
     {
         $route = $this->loadRouteForMember($actor, $routePublicId);
         $this->assertHasMaxRouteRole($actor, $route);
-        $transaction = $this->beginTransportMutation($actor, [
-            TransportTransaction::OBJECT_ROUTE,
-            TransportTransaction::OBJECT_ROUTE_META,
-            TransportTransaction::OBJECT_SUBSCRIPTION,
-            TransportTransaction::OBJECT_LANE,
-            TransportTransaction::OBJECT_LANE_META,
-            TransportTransaction::OBJECT_LANE_READ_STATE,
-            TransportTransaction::OBJECT_PAYLOAD,
-            TransportTransaction::OBJECT_PAYLOAD_META,
-        ]);
+        $transaction = $this->beginTransportMutation($actor, [TransportTransaction::OBJECT_ROUTE]);
         try {
-            foreach ($this->laneIdsForRoute($route) as $laneId) {
-                $this->deleteLaneMetaForLaneId($transaction, $laneId);
-                $this->deleteLaneReadStatesForLaneId($transaction, $laneId);
-                $this->deletePayloadsForLaneId($transaction, $laneId);
-                $transaction->delete(TransportTransaction::OBJECT_LANE, new Lane(['id' => $laneId]));
-            }
-
-            $this->deleteRouteMetaForRouteId($transaction, (int) $route->id);
-
-            foreach ((new DBList(Subscription::class, ['route_id' => (int) $route->id]))->asArray() as $subscription) {
-                $transaction->delete(TransportTransaction::OBJECT_SUBSCRIPTION, $subscription);
-            }
-
-            $transaction->delete(TransportTransaction::OBJECT_ROUTE, new Route(['id' => (int) $route->id]));
-            $transaction->updateLog('route_deleted', [
-                TransportTransaction::OBJECT_ROUTE,
-                TransportTransaction::OBJECT_ROUTE_META,
-                TransportTransaction::OBJECT_SUBSCRIPTION,
-                TransportTransaction::OBJECT_LANE,
-                TransportTransaction::OBJECT_LANE_META,
-                TransportTransaction::OBJECT_LANE_READ_STATE,
-                TransportTransaction::OBJECT_PAYLOAD,
-                TransportTransaction::OBJECT_PAYLOAD_META,
-            ], [
+            $route->is_deleted = true;
+            $transaction->write(TransportTransaction::OBJECT_ROUTE, $route);
+            $transaction->updateLog('route_deleted', [TransportTransaction::OBJECT_ROUTE], [
                 'route_id' => (int) $route->id,
             ], [
                 'route_id' => (int) $route->id,
@@ -728,7 +699,7 @@ final class App
         $metaSelector = $this->readMetaSelector();
         $sql = 'SELECT f.* FROM [Route] f
             INNER JOIN [Subscription] fm ON fm.route_id = f.id
-            WHERE fm.agent_id = ?
+            WHERE fm.agent_id = ? AND f.is_deleted = 0
             ORDER BY f.revision DESC, f.id DESC';
         $sth = DB::prepare($sql);
         $sth->execute([(int) $actor->id]);
@@ -839,7 +810,7 @@ final class App
     private function listLanes(Agent $actor, string $routePublicId): array
     {
         $route = $this->loadRouteForMember($actor, $routePublicId);
-        $lanes = (new DBList(Lane::class, ['route_id' => (int) $route->id]))->asArray();
+        $lanes = (new DBList(Lane::class, ['route_id' => (int) $route->id, 'is_deleted' => false]))->asArray();
         $metaSelector = $this->readMetaSelector();
 
         return [
@@ -969,29 +940,20 @@ final class App
         $lane = $this->loadLaneForMember($actor, $lanePublicId);
         $route = new Route(['id' => (int) $lane->route_id]);
         $this->assertHasMaxRouteRole($actor, $route);
-        $now = $this->now();
         $transaction = $this->beginTransportMutation($actor, [
-            TransportTransaction::OBJECT_ROUTE,
             TransportTransaction::OBJECT_LANE,
-            TransportTransaction::OBJECT_LANE_META,
-            TransportTransaction::OBJECT_LANE_READ_STATE,
             TransportTransaction::OBJECT_PAYLOAD,
-            TransportTransaction::OBJECT_PAYLOAD_META,
+            TransportTransaction::OBJECT_ROUTE,
         ]);
         try {
-            $this->deleteLaneMetaForLaneId($transaction, (int) $lane->id);
-            $this->deleteLaneReadStatesForLaneId($transaction, (int) $lane->id);
-            $this->deletePayloadsForLaneId($transaction, (int) $lane->id);
+            $this->softDeletePayloadsForLaneId($transaction, (int) $lane->id);
             $lane->payload_count = 0;
             $lane->last_payload_id = null;
             $transaction->write(TransportTransaction::OBJECT_LANE, $lane);
             $transaction->updateLog('lane_cleared', [
-                TransportTransaction::OBJECT_ROUTE,
                 TransportTransaction::OBJECT_LANE,
-                TransportTransaction::OBJECT_LANE_META,
-                TransportTransaction::OBJECT_LANE_READ_STATE,
                 TransportTransaction::OBJECT_PAYLOAD,
-                TransportTransaction::OBJECT_PAYLOAD_META,
+                TransportTransaction::OBJECT_ROUTE,
             ], [
                 'lane_id' => (int) $lane->id,
             ], [
@@ -1062,25 +1024,15 @@ final class App
         $route = new Route(['id' => (int) $lane->route_id]);
         $this->assertHasMaxRouteRole($actor, $route);
         $transaction = $this->beginTransportMutation($actor, [
-            TransportTransaction::OBJECT_ROUTE,
             TransportTransaction::OBJECT_LANE,
-            TransportTransaction::OBJECT_LANE_META,
-            TransportTransaction::OBJECT_LANE_READ_STATE,
-            TransportTransaction::OBJECT_PAYLOAD,
-            TransportTransaction::OBJECT_PAYLOAD_META,
+            TransportTransaction::OBJECT_ROUTE,
         ]);
         try {
-            $this->deleteLaneMetaForLaneId($transaction, (int) $lane->id);
-            $this->deleteLaneReadStatesForLaneId($transaction, (int) $lane->id);
-            $this->deletePayloadsForLaneId($transaction, (int) $lane->id);
-            $transaction->delete(TransportTransaction::OBJECT_LANE, new Lane(['id' => (int) $lane->id]));
+            $lane->is_deleted = true;
+            $transaction->write(TransportTransaction::OBJECT_LANE, $lane);
             $transaction->updateLog('lane_deleted', [
-                TransportTransaction::OBJECT_ROUTE,
                 TransportTransaction::OBJECT_LANE,
-                TransportTransaction::OBJECT_LANE_META,
-                TransportTransaction::OBJECT_LANE_READ_STATE,
-                TransportTransaction::OBJECT_PAYLOAD,
-                TransportTransaction::OBJECT_PAYLOAD_META,
+                TransportTransaction::OBJECT_ROUTE,
             ], [
                 'lane_id' => (int) $lane->id,
             ], [
@@ -1105,7 +1057,7 @@ final class App
         $limit = max(1, min(100, (int) ($_GET['limit'] ?? 50)));
 
         $sql = sprintf(
-            'SELECT id FROM [Payload] WHERE lane_id = ? AND id > ? ORDER BY id ASC LIMIT %d',
+            'SELECT id FROM [Payload] WHERE lane_id = ? AND is_deleted = 0 AND id > ? ORDER BY id ASC LIMIT %d',
             $limit
         );
         $sth = DB::prepare($sql);
@@ -1139,6 +1091,7 @@ final class App
             $payload = new Payload();
             $payload->lane_id = (int) $lane->id;
             $payload->author_agent_id = (int) $actor->id;
+            $payload->is_deleted = false;
             $payload->payload = $binaryPayload;
             $payload->payload_sha256 = hash('sha256', $binaryPayload);
             $payload->payload_size = strlen($binaryPayload);
@@ -1180,25 +1133,20 @@ final class App
         $route = new Route(['id' => (int) $lane->route_id]);
         $transaction = $this->beginTransportMutation($actor, [
             TransportTransaction::OBJECT_PAYLOAD,
-            TransportTransaction::OBJECT_PAYLOAD_META,
             TransportTransaction::OBJECT_LANE,
             TransportTransaction::OBJECT_ROUTE,
         ]);
         try {
-            $this->deletePayloadMetaForPayloadId($transaction, $deletedPayloadId);
-            $transaction->delete(TransportTransaction::OBJECT_PAYLOAD, $payload);
+            $payload->is_deleted = true;
+            $transaction->write(TransportTransaction::OBJECT_PAYLOAD, $payload);
 
             $lane->payload_count = max(0, (int) $lane->payload_count - 1);
             if ((int) ($lane->last_payload_id ?? 0) === $deletedPayloadId) {
-                $sth = \losthost\DB\DB::prepare('SELECT id FROM [Payload] WHERE lane_id = ? ORDER BY id DESC LIMIT 1');
-                $sth->execute([(int) $lane->id]);
-                $lastPayloadId = $sth->fetchColumn();
-                $lane->last_payload_id = $lastPayloadId !== false ? (int) $lastPayloadId : null;
+                $lane->last_payload_id = $this->lastActivePayloadIdForLane((int) $lane->id);
             }
             $transaction->write(TransportTransaction::OBJECT_LANE, $lane);
             $transaction->updateLog('payload_deleted', [
                 TransportTransaction::OBJECT_PAYLOAD,
-                TransportTransaction::OBJECT_PAYLOAD_META,
                 TransportTransaction::OBJECT_LANE,
                 TransportTransaction::OBJECT_ROUTE,
             ], [
@@ -1560,6 +1508,10 @@ final class App
             $this->error(404, 'Route not found');
         }
 
+        if ((bool) $route->is_deleted) {
+            $this->error(404, 'Route not found');
+        }
+
         $membership = new DBList(
             Subscription::class,
             ['route_id' => (int) $route->id, 'agent_id' => (int) $actor->id]
@@ -1592,6 +1544,10 @@ final class App
             $this->error(404, 'Lane not found');
         }
 
+        if ((bool) $lane->is_deleted) {
+            $this->error(404, 'Lane not found');
+        }
+
         $route = new Route(['id' => (int) $lane->route_id]);
         $this->loadRouteForMember($actor, (string) $route->id);
 
@@ -1605,6 +1561,10 @@ final class App
         try {
             $payload = new Payload(['id' => $payloadIdInt]);
         } catch (Exception $error) {
+            $this->error(404, 'Payload not found');
+        }
+
+        if ((bool) $payload->is_deleted) {
             $this->error(404, 'Payload not found');
         }
 
@@ -1793,6 +1753,10 @@ final class App
             $this->error(404, 'Payload not found');
         }
 
+        if ((bool) $payload->is_deleted) {
+            $this->error(404, 'Payload not found');
+        }
+
         if ((int) $payload->lane_id !== (int) $lane->id) {
             $this->error(422, 'Payload does not belong to lane');
         }
@@ -1814,10 +1778,10 @@ final class App
         return $laneIds;
     }
 
-    private function deletePayloadsForLaneId(TransportTransaction $transaction, int $laneId): void
+    private function softDeletePayloadsForLaneId(TransportTransaction $transaction, int $laneId): void
     {
         $payloadIds = [];
-        $sth = DB::prepare('SELECT id FROM [Payload] WHERE lane_id = ? ORDER BY id ASC');
+        $sth = DB::prepare('SELECT id FROM [Payload] WHERE lane_id = ? AND is_deleted = 0 ORDER BY id ASC');
         $sth->execute([$laneId]);
 
         while (($payloadId = $sth->fetchColumn()) !== false) {
@@ -1825,8 +1789,9 @@ final class App
         }
 
         foreach ($payloadIds as $payloadId) {
-            $this->deletePayloadMetaForPayloadId($transaction, $payloadId);
-            $transaction->delete(TransportTransaction::OBJECT_PAYLOAD, new Payload(['id' => $payloadId]));
+            $payload = new Payload(['id' => $payloadId]);
+            $payload->is_deleted = true;
+            $transaction->write(TransportTransaction::OBJECT_PAYLOAD, $payload);
         }
     }
 
@@ -2011,6 +1976,7 @@ final class App
         $lane = new Lane();
         $lane->route_id = (int) $route->id;
         $lane->is_default = $isDefault;
+        $lane->is_deleted = false;
         $lane->created_by_agent_id = (int) $actor->id;
         $lane->payload_count = 0;
         $lane->last_payload_id = null;
@@ -2029,10 +1995,19 @@ final class App
 
     private function findDefaultLane(Route $route): ?Lane
     {
-        $list = new DBList(Lane::class, ['route_id' => (int) $route->id, 'is_default' => true]);
+        $list = new DBList(Lane::class, ['route_id' => (int) $route->id, 'is_default' => true, 'is_deleted' => false]);
         $lane = $list->next();
 
         return $lane instanceof Lane ? $lane : null;
+    }
+
+    private function lastActivePayloadIdForLane(int $laneId): ?int
+    {
+        $sth = DB::prepare('SELECT id FROM [Payload] WHERE lane_id = ? AND is_deleted = 0 ORDER BY id DESC LIMIT 1');
+        $sth->execute([$laneId]);
+        $lastPayloadId = $sth->fetchColumn();
+
+        return $lastPayloadId !== false ? (int) $lastPayloadId : null;
     }
 
     private function assertCanManageMembers(Agent $actor, Route $route): void
@@ -2652,7 +2627,7 @@ final class App
      */
     private function loadRouteSyncItems(Agent $actor, int $skip, int $limit): array
     {
-        $sql = sprintf('SELECT r.id, r.revision FROM [Route] r
+        $sql = sprintf('SELECT r.id, r.revision, r.is_deleted FROM [Route] r
             INNER JOIN [Subscription] s ON s.route_id = r.id
             WHERE s.agent_id = ?
             ORDER BY r.revision DESC, r.id DESC
@@ -2666,7 +2641,7 @@ final class App
             $items[] = [
                 'id' => (int) $row['id'],
                 'revision' => $this->formatDateTime($row['revision']),
-                'is_deleted' => false,
+                'is_deleted' => (bool) $row['is_deleted'],
             ];
         }
 
@@ -2679,7 +2654,7 @@ final class App
     private function loadLaneSyncItems(Route $route, int $skip, int $limit): array
     {
         $sql = sprintf(
-            'SELECT id, revision FROM [Lane] WHERE route_id = ? ORDER BY revision DESC, id DESC LIMIT %d OFFSET %d',
+            'SELECT id, revision, is_deleted FROM [Lane] WHERE route_id = ? ORDER BY revision DESC, id DESC LIMIT %d OFFSET %d',
             $limit,
             $skip
         );
@@ -2692,7 +2667,7 @@ final class App
             $items[] = [
                 'id' => (int) $row['id'],
                 'revision' => $this->formatDateTime($row['revision']),
-                'is_deleted' => false,
+                'is_deleted' => (bool) $row['is_deleted'],
             ];
         }
 
@@ -2705,7 +2680,7 @@ final class App
     private function loadPayloadSyncItems(Lane $lane, int $skip, int $limit): array
     {
         $sth = DB::prepare(sprintf(
-            'SELECT id, revision FROM [Payload] WHERE lane_id = ? ORDER BY revision DESC, id DESC LIMIT %d OFFSET %d',
+            'SELECT id, revision, is_deleted FROM [Payload] WHERE lane_id = ? ORDER BY revision DESC, id DESC LIMIT %d OFFSET %d',
             $limit,
             $skip
         ));
@@ -2716,7 +2691,7 @@ final class App
             $items[] = [
                 'id' => (int) $row['id'],
                 'revision' => $this->formatDateTime($row['revision']),
-                'is_deleted' => false,
+                'is_deleted' => (bool) $row['is_deleted'],
             ];
         }
 

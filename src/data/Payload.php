@@ -10,6 +10,7 @@ final class Payload extends UpdatableTransportDBObject
         'id' => 'BIGINT UNSIGNED NOT NULL AUTO_INCREMENT',
         'lane_id' => 'BIGINT UNSIGNED NOT NULL',
         'author_agent_id' => 'BIGINT UNSIGNED NOT NULL',
+        'is_deleted' => 'TINYINT(1) NOT NULL DEFAULT 0',
         'payload' => 'LONGBLOB NOT NULL',
         'payload_sha256' => 'CHAR(64) NOT NULL',
         'payload_size' => 'INT UNSIGNED NOT NULL',
@@ -18,6 +19,7 @@ final class Payload extends UpdatableTransportDBObject
         'revision' => 'DATETIME(6) NOT NULL',
         'PRIMARY KEY' => 'id',
         'INDEX lane_id' => 'lane_id',
+        'INDEX lane_is_deleted' => ['lane_id', 'is_deleted'],
         'INDEX author_agent_id' => 'author_agent_id',
         'INDEX revision' => 'revision',
     ];

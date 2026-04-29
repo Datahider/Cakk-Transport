@@ -864,12 +864,39 @@ final class AcceptanceRunner
         $this->assertStatus($publisherDeleteRoute, 403);
         $this->assertSame('Agent does not have maximal route role', $publisherDeleteRoute['json']['error'] ?? null, 'publisher cannot delete route');
 
+        $laneSnapshot = $this->toLazySyncSnapshot($this->json('POST', '/sync/routes/' . $this->routeId('main') . '/lanes', [
+            'skip' => 0,
+            'limit' => 50,
+            'items' => [],
+        ], $this->token('b')));
+
+        $payloadSnapshot = $this->toLazySyncSnapshot($this->json('POST', '/sync/lanes/' . $this->laneId('extra') . '/payloads', [
+            'skip' => 0,
+            'limit' => 100,
+            'items' => [],
+        ], $this->token('b')));
+
+        $routeSnapshot = $this->toLazySyncSnapshot($this->json('POST', '/sync/routes', [
+            'skip' => 0,
+            'limit' => 50,
+            'items' => [],
+        ], $this->token('b')));
+
         $clearLaneDenied = $this->json('POST', '/lanes/' . $this->laneId('extra') . '/clear', [], $this->token('c'));
         $this->assertStatus($clearLaneDenied, 403);
         $this->assertSame('Agent does not have maximal route role', $clearLaneDenied['json']['error'] ?? null, 'admin cannot clear lane if owner exists');
 
         $clearLane = $this->json('POST', '/lanes/' . $this->laneId('extra') . '/clear', [], $this->token('a'));
         $this->assertStatus($clearLane, 200);
+
+        $payloadsAfterClear = $this->json('POST', '/sync/lanes/' . $this->laneId('extra') . '/payloads', [
+            'skip' => 0,
+            'limit' => 100,
+            'items' => $payloadSnapshot,
+        ], $this->token('b'));
+        $this->assertStatus($payloadsAfterClear, 200);
+        $this->assertLazySyncItems($payloadsAfterClear, 'payload clear emits patch');
+        $this->assertDeletedLazySyncItem($payloadsAfterClear, $this->payloadId('extra1'), 'cleared payload marked deleted');
 
         $deleteLaneDenied = $this->json('DELETE', '/lanes/' . $this->laneId('extra'), null, $this->token('b'));
         $this->assertStatus($deleteLaneDenied, 403);
@@ -878,12 +905,30 @@ final class AcceptanceRunner
         $deleteLane = $this->json('DELETE', '/lanes/' . $this->laneId('extra'), null, $this->token('a'));
         $this->assertStatus($deleteLane, 200);
 
+        $lanesAfterDelete = $this->json('POST', '/sync/routes/' . $this->routeId('main') . '/lanes', [
+            'skip' => 0,
+            'limit' => 50,
+            'items' => $laneSnapshot,
+        ], $this->token('b'));
+        $this->assertStatus($lanesAfterDelete, 200);
+        $this->assertLazySyncItems($lanesAfterDelete, 'lane delete emits patch');
+        $this->assertDeletedLazySyncItem($lanesAfterDelete, $this->laneId('extra'), 'deleted lane marked deleted');
+
         $deletedLaneView = $this->json('GET', '/lanes/' . $this->laneId('extra'), null, $this->token('a'));
         $this->assertStatus($deletedLaneView, 404);
         $this->assertSame('Lane not found', $deletedLaneView['json']['error'] ?? null, 'deleted lane gone');
 
         $deleteRoute = $this->json('DELETE', '/routes/' . $this->routeId('main'), null, $this->token('a'));
         $this->assertStatus($deleteRoute, 200);
+
+        $routesAfterDelete = $this->json('POST', '/sync/routes', [
+            'skip' => 0,
+            'limit' => 50,
+            'items' => $routeSnapshot,
+        ], $this->token('b'));
+        $this->assertStatus($routesAfterDelete, 200);
+        $this->assertLazySyncItems($routesAfterDelete, 'route delete emits patch');
+        $this->assertDeletedLazySyncItem($routesAfterDelete, $this->routeId('main'), 'deleted route marked deleted');
 
         $deletedRoute = $this->json('GET', '/routes/' . $this->routeId('main'), null, $this->token('a'));
         $this->assertStatus($deletedRoute, 404);
@@ -1084,6 +1129,24 @@ final class AcceptanceRunner
         $this->assertTrue(array_key_exists('id', $items[0] ?? []), $label . ' item contains id');
         $this->assertTrue(array_key_exists('revision', $items[0] ?? []), $label . ' item contains revision');
         $this->assertTrue(array_key_exists('is_deleted', $items[0] ?? []), $label . ' item contains is_deleted');
+    }
+
+    /**
+     * @param array{json:array<string, mixed>} $response
+     */
+    private function assertDeletedLazySyncItem(array $response, int $id, string $label): void
+    {
+        $items = $response['json']['items'] ?? [];
+        foreach ($items as $item) {
+            if (!is_array($item) || (int) ($item['id'] ?? 0) !== $id) {
+                continue;
+            }
+
+            $this->assertSame(true, (bool) ($item['is_deleted'] ?? false), $label);
+            return;
+        }
+
+        throw new RuntimeException($label . ': item not found in sync patch');
     }
 
     /**
