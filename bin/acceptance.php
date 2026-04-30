@@ -228,7 +228,7 @@ final class AcceptanceRunner
 
         $missing = $this->json('GET', '/me/meta', null, $this->token('a'));
         $this->assertStatus($missing, 200);
-        $this->assertSame([], $missing['json']['meta'] ?? null, 'missing agent meta returns empty object');
+        $this->assertEmptyMetaObjectResponse($missing, 'missing agent meta returns empty object');
 
         $badValue = $this->json('POST', '/me/meta', [
             'meta' => ['title' => true],
@@ -276,11 +276,17 @@ final class AcceptanceRunner
 
         $deleteAll = $this->json('DELETE', '/me/meta', null, $this->token('a'));
         $this->assertStatus($deleteAll, 200);
-        $this->assertSame([], $deleteAll['json']['meta'] ?? null, 'agent meta fully deleted');
+        $this->assertEmptyMetaObjectResponse($deleteAll, 'agent meta fully deleted');
 
         $missingAgain = $this->json('GET', '/me/meta', null, $this->token('a'));
         $this->assertStatus($missingAgain, 200);
-        $this->assertSame([], $missingAgain['json']['meta'] ?? null, 'agent meta stays empty after delete');
+        $this->assertEmptyMetaObjectResponse($missingAgain, 'agent meta stays empty after delete');
+
+        $patchMissing = $this->json('PATCH', '/me/meta', [
+            'meta' => ['title' => 'Patched from empty'],
+        ], $this->token('a'));
+        $this->assertStatus($patchMissing, 200);
+        $this->assertSame('Patched from empty', $patchMissing['json']['meta']['title'] ?? null, 'patch creates empty agent meta');
 
         $putMissing = $this->json('PUT', '/me/meta', [
             'meta' => ['title' => 'Nope'],
@@ -294,7 +300,7 @@ final class AcceptanceRunner
 
         $systemMissingForeignMeta = $this->json('GET', '/agents/' . $this->agentId('c') . '/meta', null, $this->token('sys1'));
         $this->assertStatus($systemMissingForeignMeta, 200);
-        $this->assertSame([], $systemMissingForeignMeta['json']['meta'] ?? null, 'system gets empty foreign agent meta');
+        $this->assertEmptyMetaObjectResponse($systemMissingForeignMeta, 'system gets empty foreign agent meta');
 
         $systemCreateForeignMeta = $this->json('POST', '/agents/' . $this->agentId('c') . '/meta', [
             'meta' => ['ops_note' => 'watch', 'priority' => 'high'],
@@ -318,7 +324,13 @@ final class AcceptanceRunner
 
         $systemDeleteForeignMetaAll = $this->json('DELETE', '/agents/' . $this->agentId('c') . '/meta', null, $this->token('sys1'));
         $this->assertStatus($systemDeleteForeignMetaAll, 200);
-        $this->assertSame([], $systemDeleteForeignMetaAll['json']['meta'] ?? null, 'system can delete foreign agent meta');
+        $this->assertEmptyMetaObjectResponse($systemDeleteForeignMetaAll, 'system can delete foreign agent meta');
+
+        $systemPatchForeignMetaMissing = $this->json('PATCH', '/agents/' . $this->agentId('c') . '/meta', [
+            'meta' => ['ops_note' => 'recreated'],
+        ], $this->token('sys1'));
+        $this->assertStatus($systemPatchForeignMetaMissing, 200);
+        $this->assertSame('recreated', $systemPatchForeignMetaMissing['json']['meta']['ops_note'] ?? null, 'system patch creates empty foreign agent meta');
     }
 
     private function scenarioRoutesAndSubscriptions(): void
@@ -534,7 +546,7 @@ final class AcceptanceRunner
 
         $missing = $this->json('GET', '/routes/' . $this->routeId('system') . '/meta', null, $this->token('sys1'));
         $this->assertStatus($missing, 200);
-        $this->assertSame([], $missing['json']['meta'] ?? null, 'route meta initially empty');
+        $this->assertEmptyMetaObjectResponse($missing, 'route meta initially empty');
 
         $publisherDenied = $this->json('POST', '/routes/' . $this->routeId('main') . '/meta', [
             'meta' => ['title' => 'blocked'],
@@ -575,13 +587,19 @@ final class AcceptanceRunner
 
         $deleteAll = $this->json('DELETE', '/routes/' . $this->routeId('system') . '/meta', null, $this->token('sys1'));
         $this->assertStatus($deleteAll, 200);
-        $this->assertSame([], $deleteAll['json']['meta'] ?? null, 'route meta fully deleted');
+        $this->assertEmptyMetaObjectResponse($deleteAll, 'route meta fully deleted');
 
         $putMissing = $this->json('PUT', '/routes/' . $this->routeId('system') . '/meta', [
             'meta' => ['title' => 'restored'],
         ], $this->token('sys1'));
         $this->assertStatus($putMissing, 404);
         $this->assertSame('Route meta not found', $putMissing['json']['error'] ?? null, 'route put requires existing meta');
+
+        $patchMissing = $this->json('PATCH', '/routes/' . $this->routeId('system') . '/meta', [
+            'meta' => ['title' => 'restored by patch'],
+        ], $this->token('sys1'));
+        $this->assertStatus($patchMissing, 200);
+        $this->assertSame('restored by patch', $patchMissing['json']['meta']['title'] ?? null, 'route patch creates empty meta');
     }
 
     private function scenarioLanesAndLaneMeta(): void
@@ -624,7 +642,7 @@ final class AcceptanceRunner
 
         $missingMeta = $this->json('GET', '/lanes/' . $this->laneId('extra') . '/meta', null, $this->token('a'));
         $this->assertStatus($missingMeta, 200);
-        $this->assertSame([], $missingMeta['json']['meta'] ?? null, 'lane meta initially empty');
+        $this->assertEmptyMetaObjectResponse($missingMeta, 'lane meta initially empty');
 
         $publisherMetaDenied = $this->json('POST', '/lanes/' . $this->laneId('extra') . '/meta', [
             'meta' => ['title' => 'blocked'],
@@ -662,12 +680,19 @@ final class AcceptanceRunner
 
         $deleteMetaAll = $this->json('DELETE', '/lanes/' . $this->laneId('extra') . '/meta', null, $this->token('a'));
         $this->assertStatus($deleteMetaAll, 200);
+        $this->assertEmptyMetaObjectResponse($deleteMetaAll, 'lane meta fully deleted');
 
         $putLaneMetaMissing = $this->json('PUT', '/lanes/' . $this->laneId('extra') . '/meta', [
             'meta' => ['title' => 'restored'],
         ], $this->token('a'));
         $this->assertStatus($putLaneMetaMissing, 404);
         $this->assertSame('Lane meta not found', $putLaneMetaMissing['json']['error'] ?? null, 'lane put requires existing meta');
+
+        $patchLaneMetaMissing = $this->json('PATCH', '/lanes/' . $this->laneId('extra') . '/meta', [
+            'meta' => ['title' => 'restored by patch'],
+        ], $this->token('a'));
+        $this->assertStatus($patchLaneMetaMissing, 200);
+        $this->assertSame('restored by patch', $patchLaneMetaMissing['json']['meta']['title'] ?? null, 'lane patch creates empty meta');
     }
 
     private function scenarioPayloadsAndReadState(): void
@@ -1013,7 +1038,7 @@ final class AcceptanceRunner
         $this->assertStatus($lanesStable, 200);
         $this->assertSame([], $lanesStable['json']['items'] ?? null, 'lanes sync skips matching revisions');
 
-        $laneMetaSync = $this->json('POST', '/lanes/' . $this->laneId('extra') . '/meta', [
+        $laneMetaSync = $this->json('PATCH', '/lanes/' . $this->laneId('extra') . '/meta', [
             'meta' => ['sync_lane' => 'Extra lane sync'],
         ], $this->token('a'));
         $this->assertStatus($laneMetaSync, 200);
@@ -1424,6 +1449,23 @@ final class AcceptanceRunner
                 $message,
                 var_export($expected, true),
                 var_export($actual, true)
+            ));
+        }
+        $this->out('  ok  ' . $message);
+    }
+
+    /**
+     * @param array{body:string,json:array<string,mixed>} $response
+     */
+    private function assertEmptyMetaObjectResponse(array $response, string $message): void
+    {
+        $this->assertions++;
+        $meta = $response['json']['meta'] ?? null;
+        if (!is_array($meta) || $meta !== [] || !str_contains($response['body'], '"meta":{}')) {
+            throw new RuntimeException(sprintf(
+                'Assertion failed: %s. Expected empty meta object, got body %s',
+                $message,
+                $response['body']
             ));
         }
         $this->out('  ok  ' . $message);

@@ -552,7 +552,7 @@ final class App
 
         return [
             'ok' => true,
-            'meta' => $this->selectMetaFields($meta, $this->readMetaSelector(true)),
+            'meta' => $this->metaResponseValue($this->selectMetaFields($meta, $this->readMetaSelector(true))),
         ];
     }
 
@@ -563,7 +563,7 @@ final class App
 
         return [
             'ok' => true,
-            'meta' => $this->selectMetaFields($meta, $this->readMetaSelector(true)),
+            'meta' => $this->metaResponseValue($this->selectMetaFields($meta, $this->readMetaSelector(true))),
         ];
     }
 
@@ -587,7 +587,7 @@ final class App
         $meta = $this->readRequiredMetaFromRequest();
         $this->writeAgentMeta($actor, $meta, true);
 
-        return ['ok' => true, 'meta' => $meta];
+        return ['ok' => true, 'meta' => $this->metaResponseValue($meta)];
     }
 
     private function createForeignAgentMeta(Agent $actor, string $targetPublicId): array
@@ -601,7 +601,7 @@ final class App
         $meta = $this->readRequiredMetaFromRequest();
         $this->writeAgentMetaForTarget($actor, $target, $meta, true);
 
-        return ['ok' => true, 'meta' => $meta];
+        return ['ok' => true, 'meta' => $this->metaResponseValue($meta)];
     }
 
     private function replaceAgentMeta(Agent $actor): array
@@ -610,7 +610,7 @@ final class App
         $meta = $this->readRequiredMetaFromRequest();
         $this->writeAgentMeta($actor, $meta, true);
 
-        return ['ok' => true, 'meta' => $meta];
+        return ['ok' => true, 'meta' => $this->metaResponseValue($meta)];
     }
 
     private function replaceForeignAgentMeta(Agent $actor, string $targetPublicId): array
@@ -627,11 +627,10 @@ final class App
     {
         $meta = $this->readRequiredMetaFromRequest();
         $existing = $this->loadAgentMetaData($actor);
-        $this->assertMetaExists($existing, 'Agent meta not found');
         $updated = array_replace($existing, $meta);
         $this->writeAgentMeta($actor, $updated, false);
 
-        return ['ok' => true, 'meta' => $updated];
+        return ['ok' => true, 'meta' => $this->metaResponseValue($updated)];
     }
 
     private function patchForeignAgentMeta(Agent $actor, string $targetPublicId): array
@@ -639,11 +638,10 @@ final class App
         $target = $this->loadForeignAgentForSystemMeta($actor, $targetPublicId);
         $meta = $this->readRequiredMetaFromRequest();
         $existing = $this->loadAgentMetaData($target);
-        $this->assertMetaExists($existing, 'Agent meta not found');
         $updated = array_replace($existing, $meta);
         $this->writeAgentMetaForTarget($actor, $target, $updated, false);
 
-        return ['ok' => true, 'meta' => $updated];
+        return ['ok' => true, 'meta' => $this->metaResponseValue($updated)];
     }
 
     private function deleteAgentMeta(Agent $actor): array
@@ -654,7 +652,7 @@ final class App
         $remaining = $keys === [] ? [] : array_diff_key($existing, array_flip($keys));
         $this->writeAgentMeta($actor, $remaining, true);
 
-        return ['ok' => true, 'meta' => $remaining];
+        return ['ok' => true, 'meta' => $this->metaResponseValue($remaining)];
     }
 
     private function deleteForeignAgentMeta(Agent $actor, string $targetPublicId): array
@@ -666,7 +664,7 @@ final class App
         $remaining = $keys === [] ? [] : array_diff_key($existing, array_flip($keys));
         $this->writeAgentMetaForTarget($actor, $target, $remaining, true);
 
-        return ['ok' => true, 'meta' => $remaining];
+        return ['ok' => true, 'meta' => $this->metaResponseValue($remaining)];
     }
 
     private function createRoute(Agent $actor): array
@@ -777,7 +775,7 @@ final class App
 
         return [
             'ok' => true,
-            'meta' => $this->selectMetaFields($meta, $this->readMetaSelector(true)),
+            'meta' => $this->metaResponseValue($this->selectMetaFields($meta, $this->readMetaSelector(true))),
         ];
     }
 
@@ -793,7 +791,7 @@ final class App
         $meta = $this->readRequiredMetaFromRequest();
         $this->writeRouteMeta($actor, $route, $meta, true);
 
-        return ['ok' => true, 'meta' => $meta];
+        return ['ok' => true, 'meta' => $this->metaResponseValue($meta)];
     }
 
     private function replaceRouteMeta(Agent $actor, string $routePublicId): array
@@ -804,7 +802,7 @@ final class App
         $meta = $this->readRequiredMetaFromRequest();
         $this->writeRouteMeta($actor, $route, $meta, true);
 
-        return ['ok' => true, 'meta' => $meta];
+        return ['ok' => true, 'meta' => $this->metaResponseValue($meta)];
     }
 
     private function patchRouteMeta(Agent $actor, string $routePublicId): array
@@ -813,11 +811,10 @@ final class App
         $this->assertCanManageRouteMeta($actor, $route);
         $patch = $this->readRequiredMetaFromRequest();
         $existing = $this->loadRouteMetaData($route);
-        $this->assertMetaExists($existing, 'Route meta not found');
         $meta = array_replace($existing, $patch);
         $this->writeRouteMeta($actor, $route, $meta, false);
 
-        return ['ok' => true, 'meta' => $meta];
+        return ['ok' => true, 'meta' => $this->metaResponseValue($meta)];
     }
 
     private function deleteRouteMeta(Agent $actor, string $routePublicId): array
@@ -830,7 +827,7 @@ final class App
         $remaining = $keys === [] ? [] : array_diff_key($existing, array_flip($keys));
         $this->writeRouteMeta($actor, $route, $remaining, true);
 
-        return ['ok' => true, 'meta' => $remaining];
+        return ['ok' => true, 'meta' => $this->metaResponseValue($remaining)];
     }
 
     private function deleteRoute(Agent $actor, string $routePublicId): array
@@ -1172,7 +1169,7 @@ final class App
 
         return [
             'ok' => true,
-            'meta' => $this->selectMetaFields($meta, $this->readMetaSelector(true)),
+            'meta' => $this->metaResponseValue($this->selectMetaFields($meta, $this->readMetaSelector(true))),
         ];
     }
 
@@ -1189,7 +1186,7 @@ final class App
         $meta = $this->readRequiredMetaFromRequest();
         $this->writeLaneMeta($actor, $route, $lane, $meta, true);
 
-        return ['ok' => true, 'meta' => $meta];
+        return ['ok' => true, 'meta' => $this->metaResponseValue($meta)];
     }
 
     private function replaceLaneMeta(Agent $actor, string $lanePublicId): array
@@ -1201,7 +1198,7 @@ final class App
         $meta = $this->readRequiredMetaFromRequest();
         $this->writeLaneMeta($actor, $route, $lane, $meta, true);
 
-        return ['ok' => true, 'meta' => $meta];
+        return ['ok' => true, 'meta' => $this->metaResponseValue($meta)];
     }
 
     private function patchLaneMeta(Agent $actor, string $lanePublicId): array
@@ -1211,11 +1208,10 @@ final class App
         $this->assertCanManageLaneMeta($actor, $route);
         $patch = $this->readRequiredMetaFromRequest();
         $existing = $this->loadLaneMetaData($lane);
-        $this->assertMetaExists($existing, 'Lane meta not found');
         $meta = array_replace($existing, $patch);
         $this->writeLaneMeta($actor, $route, $lane, $meta, false);
 
-        return ['ok' => true, 'meta' => $meta];
+        return ['ok' => true, 'meta' => $this->metaResponseValue($meta)];
     }
 
     private function deleteLaneMeta(Agent $actor, string $lanePublicId): array
@@ -1229,7 +1225,7 @@ final class App
         $remaining = $keys === [] ? [] : array_diff_key($existing, array_flip($keys));
         $this->writeLaneMeta($actor, $route, $lane, $remaining, true);
 
-        return ['ok' => true, 'meta' => $remaining];
+        return ['ok' => true, 'meta' => $this->metaResponseValue($remaining)];
     }
 
     private function clearLane(Agent $actor, string $lanePublicId): array
@@ -2692,6 +2688,11 @@ final class App
         }
 
         return $selected;
+    }
+
+    private function metaResponseValue(array $meta): array|object
+    {
+        return $meta === [] ? (object) [] : $meta;
     }
 
     private function assertMetaExists(array $meta, string $message): void

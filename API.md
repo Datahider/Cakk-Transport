@@ -209,7 +209,7 @@ Rules:
 - meta values are opaque strings only
 - `POST` creates meta resource
 - `PUT` fully replaces existing meta resource
-- `PATCH` updates selected keys
+- `PATCH` updates selected keys and may create meta resource from empty state
 - `DELETE /.../meta?keys=title,avatar` deletes selected keys
 - `DELETE /.../meta` without `keys` deletes the whole meta resource
 - `GET /.../meta` returns `200` with `{ "ok": true, "meta": {} }` when meta is absent
