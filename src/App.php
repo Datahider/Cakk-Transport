@@ -63,8 +63,18 @@ final class App
                 return;
             }
 
+            if (preg_match('#^/agents/([^/]+)/meta$#', $path, $matches) === 1 && $method === 'GET') {
+                $this->respond($this->viewForeignAgentMeta($actor, rawurldecode($matches[1])));
+                return;
+            }
+
             if ($method === 'POST' && $path === '/me/meta') {
                 $this->respond($this->createAgentMeta($actor));
+                return;
+            }
+
+            if (preg_match('#^/agents/([^/]+)/meta$#', $path, $matches) === 1 && $method === 'POST') {
+                $this->respond($this->createForeignAgentMeta($actor, rawurldecode($matches[1])));
                 return;
             }
 
@@ -73,13 +83,28 @@ final class App
                 return;
             }
 
+            if (preg_match('#^/agents/([^/]+)/meta$#', $path, $matches) === 1 && $method === 'PUT') {
+                $this->respond($this->replaceForeignAgentMeta($actor, rawurldecode($matches[1])));
+                return;
+            }
+
             if ($method === 'PATCH' && $path === '/me/meta') {
                 $this->respond($this->patchAgentMeta($actor));
                 return;
             }
 
+            if (preg_match('#^/agents/([^/]+)/meta$#', $path, $matches) === 1 && $method === 'PATCH') {
+                $this->respond($this->patchForeignAgentMeta($actor, rawurldecode($matches[1])));
+                return;
+            }
+
             if ($method === 'DELETE' && $path === '/me/meta') {
                 $this->respond($this->deleteAgentMeta($actor));
+                return;
+            }
+
+            if (preg_match('#^/agents/([^/]+)/meta$#', $path, $matches) === 1 && $method === 'DELETE') {
+                $this->respond($this->deleteForeignAgentMeta($actor, rawurldecode($matches[1])));
                 return;
             }
 
@@ -171,6 +196,21 @@ final class App
                     $this->respond($this->addRouteSubscription($actor, $routePublicId));
                     return;
                 }
+            }
+
+            if (preg_match('#^/routes/([^/]+)/subscriptions/([^/]+)$#', $path, $matches) === 1 && $method === 'GET') {
+                $this->respond($this->viewRouteSubscription($actor, rawurldecode($matches[1]), rawurldecode($matches[2])));
+                return;
+            }
+
+            if (preg_match('#^/routes/([^/]+)/subscriptions/([^/]+)$#', $path, $matches) === 1 && $method === 'PUT') {
+                $this->respond($this->replaceRouteSubscription($actor, rawurldecode($matches[1]), rawurldecode($matches[2])));
+                return;
+            }
+
+            if (preg_match('#^/routes/([^/]+)/subscriptions/([^/]+)$#', $path, $matches) === 1 && $method === 'PATCH') {
+                $this->respond($this->patchRouteSubscription($actor, rawurldecode($matches[1]), rawurldecode($matches[2])));
+                return;
             }
 
             if (preg_match('#^/routes/([^/]+)/subscriptions/([^/]+)$#', $path, $matches) === 1 && $method === 'DELETE') {
@@ -498,6 +538,17 @@ final class App
         ];
     }
 
+    private function viewForeignAgentMeta(Agent $actor, string $targetPublicId): array
+    {
+        $target = $this->loadForeignAgentForSystemMeta($actor, $targetPublicId);
+        $meta = $this->loadAgentMetaData($target);
+
+        return [
+            'ok' => true,
+            'meta' => $this->selectMetaFields($meta, $this->readMetaSelector(true)),
+        ];
+    }
+
     private function viewAgentById(Agent $actor, string $targetPublicId): array
     {
         $target = $this->loadVisibleAgentById($actor, $targetPublicId);
@@ -521,11 +572,35 @@ final class App
         return ['ok' => true, 'meta' => $meta];
     }
 
+    private function createForeignAgentMeta(Agent $actor, string $targetPublicId): array
+    {
+        $target = $this->loadForeignAgentForSystemMeta($actor, $targetPublicId);
+        $existing = $this->loadAgentMetaData($target);
+        if ($existing !== []) {
+            $this->error(409, 'Agent meta already exists');
+        }
+
+        $meta = $this->readRequiredMetaFromRequest();
+        $this->writeAgentMetaForTarget($actor, $target, $meta, true);
+
+        return ['ok' => true, 'meta' => $meta];
+    }
+
     private function replaceAgentMeta(Agent $actor): array
     {
         $this->assertMetaExists($this->loadAgentMetaData($actor), 'Agent meta not found');
         $meta = $this->readRequiredMetaFromRequest();
         $this->writeAgentMeta($actor, $meta, true);
+
+        return ['ok' => true, 'meta' => $meta];
+    }
+
+    private function replaceForeignAgentMeta(Agent $actor, string $targetPublicId): array
+    {
+        $target = $this->loadForeignAgentForSystemMeta($actor, $targetPublicId);
+        $this->assertMetaExists($this->loadAgentMetaData($target), 'Agent meta not found');
+        $meta = $this->readRequiredMetaFromRequest();
+        $this->writeAgentMetaForTarget($actor, $target, $meta, true);
 
         return ['ok' => true, 'meta' => $meta];
     }
@@ -541,6 +616,18 @@ final class App
         return ['ok' => true, 'meta' => $updated];
     }
 
+    private function patchForeignAgentMeta(Agent $actor, string $targetPublicId): array
+    {
+        $target = $this->loadForeignAgentForSystemMeta($actor, $targetPublicId);
+        $meta = $this->readRequiredMetaFromRequest();
+        $existing = $this->loadAgentMetaData($target);
+        $this->assertMetaExists($existing, 'Agent meta not found');
+        $updated = array_replace($existing, $meta);
+        $this->writeAgentMetaForTarget($actor, $target, $updated, false);
+
+        return ['ok' => true, 'meta' => $updated];
+    }
+
     private function deleteAgentMeta(Agent $actor): array
     {
         $existing = $this->loadAgentMetaData($actor);
@@ -548,6 +635,18 @@ final class App
         $keys = $this->readMetaKeysSelector();
         $remaining = $keys === [] ? [] : array_diff_key($existing, array_flip($keys));
         $this->writeAgentMeta($actor, $remaining, true);
+
+        return ['ok' => true, 'meta' => $remaining];
+    }
+
+    private function deleteForeignAgentMeta(Agent $actor, string $targetPublicId): array
+    {
+        $target = $this->loadForeignAgentForSystemMeta($actor, $targetPublicId);
+        $existing = $this->loadAgentMetaData($target);
+        $this->assertMetaExists($existing, 'Agent meta not found');
+        $keys = $this->readMetaKeysSelector();
+        $remaining = $keys === [] ? [] : array_diff_key($existing, array_flip($keys));
+        $this->writeAgentMetaForTarget($actor, $target, $remaining, true);
 
         return ['ok' => true, 'meta' => $remaining];
     }
@@ -859,6 +958,81 @@ final class App
                 'role' => (string) $membership->role,
                 'joined_at' => $this->formatDateTime($membership->created_at),
             ],
+        ];
+    }
+
+    private function viewRouteSubscription(Agent $actor, string $routePublicId, string $targetPublicId): array
+    {
+        if (!(bool) $actor->is_system) {
+            $this->error(403, 'Only system agent can view individual route members');
+        }
+
+        $route = $this->loadRouteInZone($actor, $routePublicId);
+        $subscription = $this->loadRouteSubscriptionInZone($actor, $route, $targetPublicId);
+
+        return [
+            'ok' => true,
+            'subscription' => $this->serializeSubscription($subscription),
+        ];
+    }
+
+    private function replaceRouteSubscription(Agent $actor, string $routePublicId, string $targetPublicId): array
+    {
+        return $this->updateRouteSubscription($actor, $routePublicId, $targetPublicId);
+    }
+
+    private function patchRouteSubscription(Agent $actor, string $routePublicId, string $targetPublicId): array
+    {
+        return $this->updateRouteSubscription($actor, $routePublicId, $targetPublicId);
+    }
+
+    private function updateRouteSubscription(Agent $actor, string $routePublicId, string $targetPublicId): array
+    {
+        if (!(bool) $actor->is_system) {
+            $this->error(403, 'Only system agent can change route member roles');
+        }
+
+        $route = $this->loadRouteInZone($actor, $routePublicId);
+        $subscription = $this->loadRouteSubscriptionInZone($actor, $route, $targetPublicId);
+        if ((int) $subscription->agent_id === (int) $route->owner_agent_id) {
+            $this->error(422, 'Route owner subscription cannot be updated');
+        }
+
+        $payload = $this->readJsonBody();
+        $role = (string) ($payload['role'] ?? '');
+        if (!in_array($role, $this->routeRoles(), true)) {
+            $this->error(422, 'Unsupported route role');
+        }
+        if ($role === Subscription::ROLE_OWNER) {
+            $this->error(422, 'Owner role cannot be assigned through this endpoint');
+        }
+
+        $subscription->role = $role;
+        $transaction = $this->beginTransportMutation($actor, [
+            TransportTransaction::OBJECT_SUBSCRIPTION,
+            TransportTransaction::OBJECT_ROUTE,
+        ]);
+        try {
+            $transaction->write(TransportTransaction::OBJECT_SUBSCRIPTION, $subscription);
+            $transaction->updateLog('subscription_updated', [
+                TransportTransaction::OBJECT_SUBSCRIPTION,
+                TransportTransaction::OBJECT_ROUTE,
+            ], [
+                'route_id' => (int) $route->id,
+                'agent_id' => (int) $subscription->agent_id,
+                'role' => $role,
+            ], [
+                'route_id' => (int) $route->id,
+            ]);
+            $transaction->commit();
+        } catch (Throwable $error) {
+            $transaction->rollBack();
+            throw $error;
+        }
+
+        return [
+            'ok' => true,
+            'subscription' => $this->serializeSubscription($subscription),
         ];
     }
 
@@ -1624,6 +1798,15 @@ final class App
         return $target;
     }
 
+    private function loadForeignAgentForSystemMeta(Agent $actor, string $targetPublicId): Agent
+    {
+        if (!(bool) $actor->is_system) {
+            $this->error(403, 'Only system agent can read foreign agent meta');
+        }
+
+        return $this->loadAgentByIdInZone($actor, $targetPublicId);
+    }
+
     private function loadRouteForMember(Agent $actor, string $routePublicId): Route
     {
         $route = $this->loadRouteInZone($actor, $routePublicId);
@@ -1662,6 +1845,26 @@ final class App
         }
 
         return $route;
+    }
+
+    private function loadRouteSubscriptionInZone(Agent $actor, Route $route, string $targetPublicId): Subscription
+    {
+        try {
+            $target = $this->loadAgentByIdInZone($actor, $targetPublicId);
+        } catch (Exception $error) {
+            $this->error(404, 'Subscription not found');
+        }
+
+        $subscription = $this->dbList(
+            Subscription::class,
+            ['route_id' => (int) $route->id, 'agent_id' => (int) $target->id]
+        )->next();
+
+        if (!$subscription instanceof Subscription) {
+            $this->error(404, 'Subscription not found');
+        }
+
+        return $subscription;
     }
 
     private function loadRouteForMaxRoleOwner(Agent $actor, string $routePublicId): Route
@@ -1812,14 +2015,19 @@ final class App
 
     private function writeAgentMeta(Agent $actor, array $meta, bool $replaceAll): void
     {
+        $this->writeAgentMetaForTarget($actor, $actor, $meta, $replaceAll);
+    }
+
+    private function writeAgentMetaForTarget(Agent $actor, Agent $target, array $meta, bool $replaceAll): void
+    {
         $now = $this->now();
         $transaction = $this->beginTransportMutation($actor, [
             TransportTransaction::OBJECT_AGENT_META,
             TransportTransaction::OBJECT_AGENT,
         ]);
         try {
-            $this->syncMetaRecords($transaction, AgentMeta::class, ['agent_id' => (int) $actor->id], 'meta_key', 'meta_value', $meta, $replaceAll, [
-                'agent_id' => (int) $actor->id,
+            $this->syncMetaRecords($transaction, AgentMeta::class, ['agent_id' => (int) $target->id], 'meta_key', 'meta_value', $meta, $replaceAll, [
+                'agent_id' => (int) $target->id,
                 'created_at' => $now,
                 'updated_at' => $now,
                 'revision' => $now,
@@ -1828,7 +2036,7 @@ final class App
                 TransportTransaction::OBJECT_AGENT_META,
                 TransportTransaction::OBJECT_AGENT,
             ], [
-                'agent_id' => (int) $actor->id,
+                'agent_id' => (int) $target->id,
             ]);
             $transaction->commit();
         } catch (Throwable $error) {
@@ -2044,6 +2252,15 @@ final class App
             'last_seen_at' => $this->formatDateTime($session->last_seen_at),
             'expires_at' => $this->formatDateTime($session->expires_at),
             'revoked_at' => $session->revoked_at !== null ? $this->formatDateTime($session->revoked_at) : null,
+        ];
+    }
+
+    private function serializeSubscription(Subscription $subscription): array
+    {
+        return [
+            'agent_id' => (int) $subscription->agent_id,
+            'role' => (string) $subscription->role,
+            'joined_at' => $this->formatDateTime($subscription->created_at),
         ];
     }
 

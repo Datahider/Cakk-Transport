@@ -287,6 +287,38 @@ final class AcceptanceRunner
         ], $this->token('b'));
         $this->assertStatus($putMissing, 404);
         $this->assertSame('Agent meta not found', $putMissing['json']['error'] ?? null, 'put requires existing meta');
+
+        $ordinaryForeignMetaDenied = $this->json('GET', '/agents/' . $this->agentId('c') . '/meta', null, $this->token('a'));
+        $this->assertStatus($ordinaryForeignMetaDenied, 403);
+        $this->assertSame('Only system agent can read foreign agent meta', $ordinaryForeignMetaDenied['json']['error'] ?? null, 'ordinary agent cannot read foreign agent meta');
+
+        $systemMissingForeignMeta = $this->json('GET', '/agents/' . $this->agentId('c') . '/meta', null, $this->token('sys1'));
+        $this->assertStatus($systemMissingForeignMeta, 200);
+        $this->assertSame([], $systemMissingForeignMeta['json']['meta'] ?? null, 'system gets empty foreign agent meta');
+
+        $systemCreateForeignMeta = $this->json('POST', '/agents/' . $this->agentId('c') . '/meta', [
+            'meta' => ['ops_note' => 'watch', 'priority' => 'high'],
+        ], $this->token('sys1'));
+        $this->assertStatus($systemCreateForeignMeta, 200);
+        $this->assertSame('watch', $systemCreateForeignMeta['json']['meta']['ops_note'] ?? null, 'system can create foreign agent meta');
+
+        $systemViewForeignMeta = $this->json('GET', '/agents/' . $this->agentId('c') . '/meta?meta=ops_note', null, $this->token('sys1'));
+        $this->assertStatus($systemViewForeignMeta, 200);
+        $this->assertSame(['ops_note' => 'watch'], $systemViewForeignMeta['json']['meta'] ?? null, 'system can select foreign agent meta');
+
+        $systemPatchForeignMeta = $this->json('PATCH', '/agents/' . $this->agentId('c') . '/meta', [
+            'meta' => ['priority' => 'urgent'],
+        ], $this->token('sys1'));
+        $this->assertStatus($systemPatchForeignMeta, 200);
+        $this->assertSame('urgent', $systemPatchForeignMeta['json']['meta']['priority'] ?? null, 'system can patch foreign agent meta');
+
+        $systemDeleteForeignMetaKey = $this->json('DELETE', '/agents/' . $this->agentId('c') . '/meta?keys=priority', null, $this->token('sys1'));
+        $this->assertStatus($systemDeleteForeignMetaKey, 200);
+        $this->assertTrue(!array_key_exists('priority', $systemDeleteForeignMetaKey['json']['meta'] ?? []), 'system can delete foreign agent meta key');
+
+        $systemDeleteForeignMetaAll = $this->json('DELETE', '/agents/' . $this->agentId('c') . '/meta', null, $this->token('sys1'));
+        $this->assertStatus($systemDeleteForeignMetaAll, 200);
+        $this->assertSame([], $systemDeleteForeignMetaAll['json']['meta'] ?? null, 'system can delete foreign agent meta');
     }
 
     private function scenarioRoutesAndSubscriptions(): void
@@ -361,6 +393,26 @@ final class AcceptanceRunner
         ], $this->token('sys1'));
         $this->assertStatus($addB, 200);
 
+        $ownerCannotViewMember = $this->json('GET', '/routes/' . $this->routeId('main') . '/subscriptions/' . $this->agentId('b'), null, $this->token('a'));
+        $this->assertStatus($ownerCannotViewMember, 403);
+        $this->assertSame('Only system agent can view individual route members', $ownerCannotViewMember['json']['error'] ?? null, 'ordinary owner cannot view individual member');
+
+        $systemViewMember = $this->json('GET', '/routes/' . $this->routeId('main') . '/subscriptions/' . $this->agentId('b'), null, $this->token('sys1'));
+        $this->assertStatus($systemViewMember, 200);
+        $this->assertSame('publisher', $systemViewMember['json']['subscription']['role'] ?? null, 'system can view individual member');
+
+        $systemPutMember = $this->json('PUT', '/routes/' . $this->routeId('main') . '/subscriptions/' . $this->agentId('b'), [
+            'role' => 'editor',
+        ], $this->token('sys1'));
+        $this->assertStatus($systemPutMember, 200);
+        $this->assertSame('editor', $systemPutMember['json']['subscription']['role'] ?? null, 'system can replace member role');
+
+        $systemPatchMember = $this->json('PATCH', '/routes/' . $this->routeId('main') . '/subscriptions/' . $this->agentId('b'), [
+            'role' => 'publisher',
+        ], $this->token('sys1'));
+        $this->assertStatus($systemPatchMember, 200);
+        $this->assertSame('publisher', $systemPatchMember['json']['subscription']['role'] ?? null, 'system can patch member role');
+
         $subsInitial = $this->json('GET', '/routes/' . $this->routeId('main') . '/subscriptions', null, $this->token('a'));
         $this->assertStatus($subsInitial, 200);
         $this->assertTrue(count($subsInitial['json']['items'] ?? []) === 2, 'initial subscriptions include owner and publisher');
@@ -407,6 +459,12 @@ final class AcceptanceRunner
         $this->assertStatus($ownerRole, 422);
         $this->assertSame('Owner role cannot be assigned through this endpoint', $ownerRole['json']['error'] ?? null, 'owner assignment rejected');
 
+        $ownerRoleUpdate = $this->json('PUT', '/routes/' . $this->routeId('main') . '/subscriptions/' . $this->agentId('b'), [
+            'role' => 'owner',
+        ], $this->token('sys1'));
+        $this->assertStatus($ownerRoleUpdate, 422);
+        $this->assertSame('Owner role cannot be assigned through this endpoint', $ownerRoleUpdate['json']['error'] ?? null, 'owner role update rejected');
+
         $addAdmin = $this->json('POST', '/routes/' . $this->routeId('main') . '/subscriptions', [
             'agent_id' => (string) $this->agentId('c'),
             'role' => 'admin',
@@ -448,9 +506,19 @@ final class AcceptanceRunner
         $this->assertStatus($deleteMissingMember, 404);
         $this->assertSame('Subscription not found', $deleteMissingMember['json']['error'] ?? null, 'missing subscription delete rejected');
 
+        $getMissingMember = $this->json('GET', '/routes/' . $this->routeId('main') . '/subscriptions/' . $this->agentId('f'), null, $this->token('sys1'));
+        $this->assertStatus($getMissingMember, 404);
+        $this->assertSame('Subscription not found', $getMissingMember['json']['error'] ?? null, 'missing subscription get rejected');
+
         $deleteOwnerDenied = $this->json('DELETE', '/routes/' . $this->routeId('main') . '/subscriptions/' . $this->agentId('a'), null, $this->token('sys1'));
         $this->assertStatus($deleteOwnerDenied, 422);
         $this->assertSame('Route owner subscription cannot be deleted', $deleteOwnerDenied['json']['error'] ?? null, 'owner subscription delete rejected');
+
+        $updateOwnerDenied = $this->json('PATCH', '/routes/' . $this->routeId('main') . '/subscriptions/' . $this->agentId('a'), [
+            'role' => 'admin',
+        ], $this->token('sys1'));
+        $this->assertStatus($updateOwnerDenied, 422);
+        $this->assertSame('Route owner subscription cannot be updated', $updateOwnerDenied['json']['error'] ?? null, 'owner subscription update rejected');
 
         $crossZoneMember = $this->json('POST', '/routes/' . $this->routeId('main') . '/subscriptions', [
             'agent_id' => (string) $this->agentId('z2user'),

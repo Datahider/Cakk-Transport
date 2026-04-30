@@ -187,6 +187,11 @@ Response:
 - `PUT /me/meta`
 - `PATCH /me/meta`
 - `DELETE /me/meta`
+- `GET /agents/{agent_id}/meta`
+- `POST /agents/{agent_id}/meta`
+- `PUT /agents/{agent_id}/meta`
+- `PATCH /agents/{agent_id}/meta`
+- `DELETE /agents/{agent_id}/meta`
 - `GET /sessions`
 - `DELETE /sessions/{session_id}`
 
@@ -214,6 +219,11 @@ Agent visibility:
 - `system`-агент видит любого агента своей `zone`
 - обычный агент должен либо запрашивать себя, либо иметь с target хотя бы один общий не удалённый route
 - otherwise the server returns `404 Agent not found`
+
+Agent meta policy:
+- `/me/meta` works only for current authenticated agent
+- `/agents/{agent_id}/meta` is allowed only for `system`-agent of the same zone
+- ordinary agents cannot read or modify foreign agent meta through transport API
 
 ## Route endpoints
 
@@ -271,12 +281,20 @@ Route meta:
 Subscriptions:
 - `GET /routes/{route_id}/subscriptions`
 - `POST /routes/{route_id}/subscriptions`
+- `GET /routes/{route_id}/subscriptions/{agent_id}`
+- `PUT /routes/{route_id}/subscriptions/{agent_id}`
+- `PATCH /routes/{route_id}/subscriptions/{agent_id}`
 - `DELETE /routes/{route_id}/subscriptions/{agent_id}`
 
 Membership policy:
 - `POST /routes/{route_id}/subscriptions` is allowed only for `system`-agent of the same zone
+- `GET /routes/{route_id}/subscriptions/{agent_id}` is allowed only for `system`-agent of the same zone
+- `PUT /routes/{route_id}/subscriptions/{agent_id}` is allowed only for `system`-agent of the same zone
+- `PATCH /routes/{route_id}/subscriptions/{agent_id}` is allowed only for `system`-agent of the same zone
 - `DELETE /routes/{route_id}/subscriptions/{agent_id}` is allowed only for `system`-agent of the same zone
 - ordinary agents cannot add route members through transport API
+- ordinary agents cannot view individual route members through transport API
+- ordinary agents cannot change route member roles through transport API
 - ordinary agents cannot remove route members through transport API
 - deleting owner subscription is supported by endpoint surface but returns explicit error
 
@@ -290,6 +308,23 @@ Membership policy:
 
 `DELETE /routes/{route_id}/subscriptions/{agent_id}`:
 - removes target subscription from route
+- returns `404` if target agent is not subscribed to this route
+- returns explicit error if target subscription is route owner
+
+`GET /routes/{route_id}/subscriptions/{agent_id}`:
+- returns one subscription item by agent id
+- returns `404` if target agent is not subscribed to this route
+
+`PUT|PATCH /routes/{route_id}/subscriptions/{agent_id}` request:
+```json
+{
+  "role": "editor"
+}
+```
+
+`PUT|PATCH /routes/{route_id}/subscriptions/{agent_id}`:
+- updates target subscription role
+- `owner` role still cannot be assigned through this endpoint
 - returns `404` if target agent is not subscribed to this route
 - returns explicit error if target subscription is route owner
 
