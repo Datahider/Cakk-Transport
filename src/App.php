@@ -471,17 +471,18 @@ final class App
 
         $afterId = max(0, (int) ($_GET['after_id'] ?? 0));
         $limit = max(1, min(500, (int) ($_GET['limit'] ?? 100)));
-
-        $list = $this->dbList(
-            UpdateLog::class,
-            sprintf('zone = ? AND id > ? ORDER BY id ASC LIMIT %d', $limit + 1),
-            [(string) $actor->zone, $afterId]
-        );
+        $timeoutMs = $this->readNonNegativeIntQuery('timeout_ms', 0, 30000);
 
         $items = [];
-        while ($update = $list->next()) {
-            $items[] = $update;
-        }
+        $deadlineAt = microtime(true) + ($timeoutMs / 1000);
+        do {
+            $items = $this->loadUpdateBatch((string) $actor->zone, $afterId, $limit + 1);
+            if ($items !== [] || $timeoutMs === 0 || microtime(true) >= $deadlineAt) {
+                break;
+            }
+
+            usleep(100000);
+        } while (true);
 
         $hasMore = count($items) > $limit;
         if ($hasMore) {
@@ -500,6 +501,25 @@ final class App
             'latest_update_id' => $latestUpdateId,
             'has_more' => $hasMore,
         ];
+    }
+
+    /**
+     * @return list<UpdateLog>
+     */
+    private function loadUpdateBatch(string $zone, int $afterId, int $limit): array
+    {
+        $list = $this->dbList(
+            UpdateLog::class,
+            sprintf('zone = ? AND id > ? ORDER BY id ASC LIMIT %d', $limit),
+            [$zone, $afterId]
+        );
+
+        $items = [];
+        while ($update = $list->next()) {
+            $items[] = $update;
+        }
+
+        return $items;
     }
 
     private function syncRoutes(Agent $actor): array
@@ -3009,6 +3029,20 @@ final class App
         }
 
         $this->error(422, sprintf('%s must be a positive integer', $field));
+    }
+
+    private function readNonNegativeIntQuery(string $field, int $default, int $max): int
+    {
+        $value = $_GET[$field] ?? $default;
+        if (is_int($value) && $value >= 0) {
+            return min($value, $max);
+        }
+
+        if (is_string($value) && preg_match('/^(0|[1-9][0-9]*)$/', $value)) {
+            return min((int) $value, $max);
+        }
+
+        $this->error(422, sprintf('%s must be a non-negative integer', $field));
     }
 
     /**

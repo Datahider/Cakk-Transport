@@ -969,6 +969,23 @@ final class AcceptanceRunner
         );
         $this->assertSame(count($zone2Items), count($zone2Only), 'other zone sees no foreign updates');
 
+        $badTimeout = $this->json('GET', '/updates?timeout_ms=-1', null, $this->token('sys1'));
+        $this->assertStatus($badTimeout, 422);
+        $this->assertSame('timeout_ms must be a non-negative integer', $badTimeout['json']['error'] ?? null, 'updates timeout validation');
+
+        $longPollStartedAt = microtime(true);
+        $longPollEmpty = $this->json(
+            'GET',
+            '/updates?after_id=' . $this->context['updates_after']['sys1'] . '&limit=100&timeout_ms=350',
+            null,
+            $this->token('sys1')
+        );
+        $longPollElapsedMs = (microtime(true) - $longPollStartedAt) * 1000;
+        $this->assertStatus($longPollEmpty, 200);
+        $this->assertSame([], $longPollEmpty['json']['items'] ?? null, 'long poll returns empty when timeout expires');
+        $this->assertSame($this->context['updates_after']['sys1'], $longPollEmpty['json']['latest_update_id'] ?? null, 'long poll keeps latest_update_id when no new updates');
+        $this->assertTrue($longPollElapsedMs >= 250, 'long poll waits before returning empty result');
+
         $systemRoutesSyncDenied = $this->json('POST', '/sync/routes', [
             'skip' => 0,
             'limit' => 50,
