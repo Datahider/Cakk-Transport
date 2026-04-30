@@ -2257,7 +2257,7 @@ final class App
         ];
 
         if ($metaSelector !== null) {
-            $payload['meta'] = $this->selectMetaFields($this->loadAgentMetaData($actor), $metaSelector);
+            $payload['meta'] = $this->metaResponseValue($this->selectMetaFields($this->loadAgentMetaData($actor), $metaSelector));
         }
 
         return $payload;
@@ -2301,7 +2301,7 @@ final class App
         ];
 
         if ($metaSelector !== null) {
-            $payload['meta'] = $this->selectMetaFields($this->loadRouteMetaData($route), $metaSelector);
+            $payload['meta'] = $this->metaResponseValue($this->selectMetaFields($this->loadRouteMetaData($route), $metaSelector));
         }
 
         return $payload;
@@ -2327,7 +2327,7 @@ final class App
         ];
 
         if ($metaSelector !== null) {
-            $payload['meta'] = $this->selectMetaFields($this->loadLaneMetaData($lane), $metaSelector);
+            $payload['meta'] = $this->metaResponseValue($this->selectMetaFields($this->loadLaneMetaData($lane), $metaSelector));
         }
 
         return $payload;

@@ -226,6 +226,10 @@ final class AcceptanceRunner
         $this->assertStatus($me, 200);
         $this->assertSame($this->agentId('a'), $me['json']['agent']['agent_id'] ?? null, 'me returns current agent');
 
+        $meAllMissing = $this->json('GET', '/me?meta=all', null, $this->token('a'));
+        $this->assertStatus($meAllMissing, 200);
+        $this->assertEmbeddedMetaObject($meAllMissing, '"agent":{"agent_id"', 'me meta selector returns empty object');
+
         $missing = $this->json('GET', '/me/meta', null, $this->token('a'));
         $this->assertStatus($missing, 200);
         $this->assertEmptyMetaObjectResponse($missing, 'missing agent meta returns empty object');
@@ -301,6 +305,10 @@ final class AcceptanceRunner
         $systemMissingForeignMeta = $this->json('GET', '/agents/' . $this->agentId('c') . '/meta', null, $this->token('sys1'));
         $this->assertStatus($systemMissingForeignMeta, 200);
         $this->assertEmptyMetaObjectResponse($systemMissingForeignMeta, 'system gets empty foreign agent meta');
+
+        $systemViewAgentMetaAll = $this->json('GET', '/agents/' . $this->agentId('c') . '?meta=all', null, $this->token('sys1'));
+        $this->assertStatus($systemViewAgentMetaAll, 200);
+        $this->assertEmbeddedMetaObject($systemViewAgentMetaAll, '"agent":{"agent_id"', 'system sees empty agent meta as object');
 
         $systemCreateForeignMeta = $this->json('POST', '/agents/' . $this->agentId('c') . '/meta', [
             'meta' => ['ops_note' => 'watch', 'priority' => 'high'],
@@ -548,6 +556,10 @@ final class AcceptanceRunner
         $this->assertStatus($missing, 200);
         $this->assertEmptyMetaObjectResponse($missing, 'route meta initially empty');
 
+        $viewRouteMetaAllMissing = $this->json('GET', '/routes/' . $this->routeId('system') . '?meta=all', null, $this->token('sys1'));
+        $this->assertStatus($viewRouteMetaAllMissing, 200);
+        $this->assertEmbeddedMetaObject($viewRouteMetaAllMissing, '"route":{"route_id"', 'route meta selector returns empty object');
+
         $publisherDenied = $this->json('POST', '/routes/' . $this->routeId('main') . '/meta', [
             'meta' => ['title' => 'blocked'],
         ], $this->token('b'));
@@ -643,6 +655,10 @@ final class AcceptanceRunner
         $missingMeta = $this->json('GET', '/lanes/' . $this->laneId('extra') . '/meta', null, $this->token('a'));
         $this->assertStatus($missingMeta, 200);
         $this->assertEmptyMetaObjectResponse($missingMeta, 'lane meta initially empty');
+
+        $viewLaneMetaAllMissing = $this->json('GET', '/lanes/' . $this->laneId('extra') . '?meta=all', null, $this->token('a'));
+        $this->assertStatus($viewLaneMetaAllMissing, 200);
+        $this->assertEmbeddedMetaObject($viewLaneMetaAllMissing, '"lane":{"lane_id"', 'lane meta selector returns empty object');
 
         $publisherMetaDenied = $this->json('POST', '/lanes/' . $this->laneId('extra') . '/meta', [
             'meta' => ['title' => 'blocked'],
@@ -1464,6 +1480,22 @@ final class AcceptanceRunner
         if (!is_array($meta) || $meta !== [] || !str_contains($response['body'], '"meta":{}')) {
             throw new RuntimeException(sprintf(
                 'Assertion failed: %s. Expected empty meta object, got body %s',
+                $message,
+                $response['body']
+            ));
+        }
+        $this->out('  ok  ' . $message);
+    }
+
+    /**
+     * @param array{body:string} $response
+     */
+    private function assertEmbeddedMetaObject(array $response, string $prefix, string $message): void
+    {
+        $this->assertions++;
+        if (!str_contains($response['body'], $prefix) || !str_contains($response['body'], '"meta":{}')) {
+            throw new RuntimeException(sprintf(
+                'Assertion failed: %s. Expected embedded empty meta object, got body %s',
                 $message,
                 $response['body']
             ));
