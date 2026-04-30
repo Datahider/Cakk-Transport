@@ -557,6 +557,10 @@ final class App
             $subscriberIds
         );
 
+        if ($subscriberIds !== [] && !(bool) $actor->is_system) {
+            $this->error(403, 'Only system agent can set initial route members');
+        }
+
         $allowedKinds = [
             TransportTransaction::OBJECT_ROUTE,
             TransportTransaction::OBJECT_SUBSCRIPTION,
@@ -772,7 +776,11 @@ final class App
 
     private function addRouteSubscription(Agent $actor, string $routePublicId): array
     {
-        $route = $this->loadRouteForMember($actor, $routePublicId);
+        if (!(bool) $actor->is_system) {
+            $this->error(403, 'Only system agent can add route members');
+        }
+
+        $route = $this->loadRouteInZone($actor, $routePublicId);
         $payload = $this->readJsonBody();
         $targetPublicId = trim((string) ($payload['agent_id'] ?? ''));
         if ($targetPublicId === '') {
@@ -794,17 +802,12 @@ final class App
             $this->error(409, 'Agent is already a member of this route');
         }
 
-        $this->assertCanManageMembers($actor, $route);
-
         $role = (string) ($payload['role'] ?? Subscription::ROLE_PUBLISHER);
         if (!in_array($role, $this->routeRoles(), true)) {
             $this->error(422, 'Unsupported route role');
         }
         if ($role === Subscription::ROLE_OWNER) {
             $this->error(422, 'Owner role cannot be assigned through this endpoint');
-        }
-        if ($role === Subscription::ROLE_ADMIN && $this->routeRoleForAgent($actor, $route) !== Subscription::ROLE_OWNER) {
-            $this->error(403, 'Only route owner can assign admin role');
         }
 
         $membership = new Subscription();
@@ -1553,6 +1556,22 @@ final class App
 
     private function loadRouteForMember(Agent $actor, string $routePublicId): Route
     {
+        $route = $this->loadRouteInZone($actor, $routePublicId);
+
+        $membership = $this->dbList(
+            Subscription::class,
+            ['route_id' => (int) $route->id, 'agent_id' => (int) $actor->id]
+        );
+
+        if (!$membership->next()) {
+            $this->error(403, 'Agent is not a route member');
+        }
+
+        return $route;
+    }
+
+    private function loadRouteInZone(Agent $actor, string $routePublicId): Route
+    {
         $routeId = $this->requiredPositiveIntString($routePublicId, 'route_id');
 
         try {
@@ -1567,15 +1586,6 @@ final class App
 
         if ((bool) $route->is_deleted) {
             $this->error(404, 'Route not found');
-        }
-
-        $membership = $this->dbList(
-            Subscription::class,
-            ['route_id' => (int) $route->id, 'agent_id' => (int) $actor->id]
-        );
-
-        if (!$membership->next()) {
-            $this->error(403, 'Agent is not a route member');
         }
 
         return $route;

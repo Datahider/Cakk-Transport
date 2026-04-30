@@ -229,7 +229,8 @@ Request:
 Meaning:
 - creates a route in caller’s zone
 - creates creator subscription automatically
-- creates subscriptions for all `agent_ids`
+- `agent_ids` may be used only by `system`-agent
+- if `agent_ids` is present, creates subscriptions for all listed agents
 - creates one default lane automatically
 - if `meta` is present, creates initial route meta in the same DB transaction as route creation
 
@@ -259,6 +260,10 @@ Route meta:
 Subscriptions:
 - `GET /routes/{route_id}/subscriptions`
 - `POST /routes/{route_id}/subscriptions`
+
+Membership policy:
+- `POST /routes/{route_id}/subscriptions` is allowed only for `system`-agent of the same zone
+- ordinary agents cannot add route members through transport API
 
 `POST /routes/{route_id}/subscriptions` request:
 ```json

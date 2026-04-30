@@ -300,11 +300,10 @@ final class AcceptanceRunner
         $crossZoneRoute = $this->json('POST', '/routes', [
             'agent_ids' => [(string) $this->agentId('z2user')],
         ], $this->token('a'));
-        $this->assertStatus($crossZoneRoute, 404);
-        $this->assertSame('Agent not found', $crossZoneRoute['json']['error'] ?? null, 'cross-zone member rejected');
+        $this->assertStatus($crossZoneRoute, 403);
+        $this->assertSame('Only system agent can set initial route members', $crossZoneRoute['json']['error'] ?? null, 'ordinary agent cannot set initial members');
 
         $routeMain = $this->json('POST', '/routes', [
-            'agent_ids' => [(string) $this->agentId('b')],
             'meta' => [
                 'title' => 'Main route',
                 'avatar' => 'route.png',
@@ -343,6 +342,21 @@ final class AcceptanceRunner
         $this->assertStatus($listRoutesSubset, 200);
         $this->assertSame(['title' => 'Main route'], $this->findRouteMetaInList($listRoutesSubset, $this->routeId('main')), 'route list returns selected meta only');
 
+        $ownerCannotManage = $this->json('POST', '/routes/' . $this->routeId('main') . '/subscriptions', [
+            'agent_id' => (string) $this->agentId('c'),
+        ], $this->token('a'));
+        $this->assertStatus($ownerCannotManage, 403);
+        $this->assertSame('Only system agent can add route members', $ownerCannotManage['json']['error'] ?? null, 'ordinary owner cannot manage members');
+
+        $addB = $this->json('POST', '/routes/' . $this->routeId('main') . '/subscriptions', [
+            'agent_id' => (string) $this->agentId('b'),
+        ], $this->token('sys1'));
+        $this->assertStatus($addB, 200);
+
+        $subsInitial = $this->json('GET', '/routes/' . $this->routeId('main') . '/subscriptions', null, $this->token('a'));
+        $this->assertStatus($subsInitial, 200);
+        $this->assertTrue(count($subsInitial['json']['items'] ?? []) === 2, 'initial subscriptions include owner and publisher');
+
         $bMeta = $this->json('POST', '/me/meta', [
             'meta' => ['title' => 'Agent B', 'avatar' => 'b.png'],
         ], $this->token('b'));
@@ -361,71 +375,60 @@ final class AcceptanceRunner
         $this->assertStatus($viewCrossZoneAgent, 404);
         $this->assertSame('Agent not found', $viewCrossZoneAgent['json']['error'] ?? null, 'cross-zone agent hidden');
 
-        $subsInitial = $this->json('GET', '/routes/' . $this->routeId('main') . '/subscriptions', null, $this->token('a'));
-        $this->assertStatus($subsInitial, 200);
-        $this->assertTrue(count($subsInitial['json']['items'] ?? []) === 2, 'initial subscriptions include owner and publisher');
-
-        $publisherCannotManage = $this->json('POST', '/routes/' . $this->routeId('main') . '/subscriptions', [
-            'agent_id' => (string) $this->agentId('c'),
-        ], $this->token('b'));
-        $this->assertStatus($publisherCannotManage, 403);
-        $this->assertSame('Agent cannot manage route members', $publisherCannotManage['json']['error'] ?? null, 'publisher cannot manage members');
-
         $duplicate = $this->json('POST', '/routes/' . $this->routeId('main') . '/subscriptions', [
             'agent_id' => (string) $this->agentId('b'),
-        ], $this->token('a'));
+        ], $this->token('sys1'));
         $this->assertStatus($duplicate, 409);
         $this->assertSame('Agent is already a member of this route', $duplicate['json']['error'] ?? null, 'duplicate member rejected');
 
         $badRole = $this->json('POST', '/routes/' . $this->routeId('main') . '/subscriptions', [
             'agent_id' => (string) $this->agentId('c'),
             'role' => 'bad-role',
-        ], $this->token('a'));
+        ], $this->token('sys1'));
         $this->assertStatus($badRole, 422);
         $this->assertSame('Unsupported route role', $badRole['json']['error'] ?? null, 'bad role rejected');
 
         $ownerRole = $this->json('POST', '/routes/' . $this->routeId('main') . '/subscriptions', [
             'agent_id' => (string) $this->agentId('c'),
             'role' => 'owner',
-        ], $this->token('a'));
+        ], $this->token('sys1'));
         $this->assertStatus($ownerRole, 422);
         $this->assertSame('Owner role cannot be assigned through this endpoint', $ownerRole['json']['error'] ?? null, 'owner assignment rejected');
 
         $addAdmin = $this->json('POST', '/routes/' . $this->routeId('main') . '/subscriptions', [
             'agent_id' => (string) $this->agentId('c'),
             'role' => 'admin',
-        ], $this->token('a'));
+        ], $this->token('sys1'));
         $this->assertStatus($addAdmin, 200);
 
         $addGuest = $this->json('POST', '/routes/' . $this->routeId('main') . '/subscriptions', [
             'agent_id' => (string) $this->agentId('d'),
             'role' => 'guest',
-        ], $this->token('a'));
+        ], $this->token('sys1'));
         $this->assertStatus($addGuest, 200);
 
         $addEditor = $this->json('POST', '/routes/' . $this->routeId('main') . '/subscriptions', [
             'agent_id' => (string) $this->agentId('e'),
             'role' => 'editor',
-        ], $this->token('a'));
+        ], $this->token('sys1'));
         $this->assertStatus($addEditor, 200);
 
-        $adminAssignAdmin = $this->json('POST', '/routes/' . $this->routeId('main') . '/subscriptions', [
+        $publisherCannotManage = $this->json('POST', '/routes/' . $this->routeId('main') . '/subscriptions', [
             'agent_id' => (string) $this->agentId('f'),
-            'role' => 'admin',
-        ], $this->token('c'));
-        $this->assertStatus($adminAssignAdmin, 403);
-        $this->assertSame('Only route owner can assign admin role', $adminAssignAdmin['json']['error'] ?? null, 'admin cannot assign admin');
+        ], $this->token('b'));
+        $this->assertStatus($publisherCannotManage, 403);
+        $this->assertSame('Only system agent can add route members', $publisherCannotManage['json']['error'] ?? null, 'publisher cannot manage members');
 
-        $ownerAddsPublisher = $this->json('POST', '/routes/' . $this->routeId('main') . '/subscriptions', [
+        $systemAddsPublisher = $this->json('POST', '/routes/' . $this->routeId('main') . '/subscriptions', [
             'agent_id' => (string) $this->agentId('f'),
             'role' => 'publisher',
-        ], $this->token('a'));
-        $this->assertStatus($ownerAddsPublisher, 200);
+        ], $this->token('sys1'));
+        $this->assertStatus($systemAddsPublisher, 200);
 
         $crossZoneMember = $this->json('POST', '/routes/' . $this->routeId('main') . '/subscriptions', [
             'agent_id' => (string) $this->agentId('z2user'),
             'role' => 'publisher',
-        ], $this->token('a'));
+        ], $this->token('sys1'));
         $this->assertStatus($crossZoneMember, 404);
         $this->assertSame('Agent not found', $crossZoneMember['json']['error'] ?? null, 'cross-zone subscription rejected');
     }
