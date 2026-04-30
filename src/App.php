@@ -533,7 +533,6 @@ final class App
     private function createRoute(Agent $actor): array
     {
         $payload = $this->readJsonBody();
-        $systemOwned = (bool) ($payload['system_owned'] ?? false);
         $subscriberIds = array_values(array_filter(
             is_array($payload['agent_ids'] ?? null) ? $payload['agent_ids'] : [],
             static fn (mixed $item): bool => is_string($item) && trim($item) !== ''
@@ -551,14 +550,14 @@ final class App
         try {
             $route = new Route();
             $route->zone = (string) $actor->zone;
-            $route->owner_agent_id = $systemOwned ? null : (int) $actor->id;
+            $route->owner_agent_id = (int) $actor->id;
             $route->is_deleted = false;
             $transaction->write(TransportTransaction::OBJECT_ROUTE, $route);
 
             $membership = new Subscription();
             $membership->route_id = (int) $route->id;
             $membership->agent_id = (int) $actor->id;
-            $membership->role = $systemOwned ? Subscription::ROLE_ADMIN : Subscription::ROLE_OWNER;
+            $membership->role = Subscription::ROLE_OWNER;
             $transaction->write(TransportTransaction::OBJECT_SUBSCRIPTION, $membership);
 
             foreach ($subscriberIds as $subscriberId) {
@@ -1901,9 +1900,7 @@ final class App
         $payload = [
             'route_id' => (int) $route->id,
             'zone' => (string) $route->zone,
-            'owner_agent_id' => $route->owner_agent_id !== null
-                ? (int) $route->owner_agent_id
-                : 'system',
+            'owner_agent_id' => (int) $route->owner_agent_id,
             'default_lane_id' => $defaultLane !== null ? (int) $defaultLane->id : null,
             'created_at' => $this->formatDateTime($route->created_at),
             'updated_at' => $this->formatDateTime($route->updated_at),

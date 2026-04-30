@@ -308,12 +308,10 @@ final class AcceptanceRunner
         $this->assertStatus($routeMain, 200);
         $this->rememberRoute('main', $routeMain);
 
-        $systemOwned = $this->json('POST', '/routes', [
-            'system_owned' => true,
-        ], $this->token('sys1'));
-        $this->assertStatus($systemOwned, 200);
-        $this->rememberRoute('system', $systemOwned);
-        $this->assertSame('system', $systemOwned['json']['route']['owner_agent_id'] ?? null, 'system-owned route owner marker');
+        $systemRoute = $this->json('POST', '/routes', [], $this->token('sys1'));
+        $this->assertStatus($systemRoute, 200);
+        $this->rememberRoute('system', $systemRoute);
+        $this->assertSame($this->agentId('sys1'), $systemRoute['json']['route']['owner_agent_id'] ?? null, 'system agent becomes route owner');
 
         $routesAfterCreate = $this->json('GET', '/routes', null, $this->token('a'));
         $this->assertStatus($routesAfterCreate, 200);

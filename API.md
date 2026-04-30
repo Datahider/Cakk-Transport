@@ -54,7 +54,7 @@ Session token:
 `route`:
 - `route_id: int`
 - `zone: string`
-- `owner_agent_id: int|"system"`
+- `owner_agent_id: int`
 - `default_lane_id: ?int`
 - `created_at: string`
 - `updated_at: string`
@@ -210,7 +210,6 @@ Rules:
 Request:
 ```json
 {
-  "system_owned": false,
   "agent_ids": ["84", "96"]
 }
 ```
