@@ -1535,7 +1535,7 @@ final class App
             return $target;
         }
 
-        $sharedRouteId = $this->dbValue(
+        $sharedRoute = $this->dbView(
             'SELECT s1.route_id FROM [Subscription] s1
                 INNER JOIN [Subscription] s2 ON s2.route_id = s1.route_id
                 INNER JOIN [Route] r ON r.id = s1.route_id
@@ -1544,7 +1544,7 @@ final class App
             [(int) $requestActor->id, (int) $target->id]
         );
 
-        if (count($sharedRouteId->asArray()) === 0) {
+        if (!$sharedRoute->next()) {
             $this->error(404, 'Agent not found');
         }
 
