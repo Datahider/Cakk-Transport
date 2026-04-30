@@ -357,10 +357,6 @@ final class App
         $isSystem = (bool) ($payload['is_system'] ?? false);
         $zoneHasAgents = $this->zoneHasAgents($zone);
 
-        if ($isSystem && $zoneHasAgents) {
-            $this->error(409, 'System agent can only be the first agent in zone');
-        }
-
         if (!$isSystem && !$zoneHasAgents) {
             $this->error(404, 'Zone not found');
         }
@@ -369,12 +365,34 @@ final class App
         $actor->zone = $zone;
         $actor->is_system = $isSystem;
         $actor->password_hash = password_hash($password, PASSWORD_DEFAULT);
-        $actor->write();
+        $transaction = TransportTransaction::begin($zone, null, [
+            TransportTransaction::OBJECT_AGENT,
+            TransportTransaction::OBJECT_AGENT_SESSION,
+        ]);
+        try {
+            $transaction->write(TransportTransaction::OBJECT_AGENT, $actor);
+            [$session, $sessionToken] = $this->createSessionRecord(
+                $actor,
+                $this->optionalStringField($payload, 'device_label', 255, null),
+                $transaction
+            );
+            $transaction->updateLog('agent_registered', [
+                TransportTransaction::OBJECT_AGENT,
+                TransportTransaction::OBJECT_AGENT_SESSION,
+            ], [
+                'agent_id' => (int) $actor->id,
+                'is_system' => $isSystem,
+            ]);
+            $transaction->commit();
+        } catch (Throwable $error) {
+            $transaction->rollBack();
 
-        [$session, $sessionToken] = $this->createSessionRecord(
-            $actor,
-            $this->optionalStringField($payload, 'device_label', 255, null)
-        );
+            if ($isSystem && $this->isDuplicateKeyError($error)) {
+                $this->error(409, 'System agent can only be the first agent in zone');
+            }
+
+            throw $error;
+        }
 
         return [
             'ok' => true,
@@ -1726,7 +1744,11 @@ final class App
     /**
      * @return array{0: AgentSession, 1: string}
      */
-    private function createSessionRecord(Agent $actor, ?string $deviceLabel): array
+    private function createSessionRecord(
+        Agent $actor,
+        ?string $deviceLabel,
+        ?TransportTransaction $transaction = null,
+    ): array
     {
         $now = $this->now();
         $token = 'sess_' . $this->randomToken(48);
@@ -1740,7 +1762,11 @@ final class App
         $session->last_seen_at = $now;
         $session->expires_at = $now->modify('+180 days');
         $session->revoked_at = null;
-        $session->write();
+        if ($transaction instanceof TransportTransaction) {
+            $transaction->write(TransportTransaction::OBJECT_AGENT_SESSION, $session);
+        } else {
+            $session->write();
+        }
 
         return [$session, $token];
     }
@@ -2907,6 +2933,19 @@ final class App
     private function randomToken(int $length): string
     {
         return substr(bin2hex(random_bytes($length)), 0, $length);
+    }
+
+    private function isDuplicateKeyError(Throwable $error): bool
+    {
+        if (!$error instanceof \PDOException) {
+            return false;
+        }
+
+        if (($error->errorInfo[1] ?? null) === 1062) {
+            return true;
+        }
+
+        return (string) $error->getCode() === '23000';
     }
 
     private function zoneHasAgents(string $zone): bool

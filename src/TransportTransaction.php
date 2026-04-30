@@ -14,6 +14,7 @@ use losthost\DB\DBObject;
 final class TransportTransaction
 {
     public const OBJECT_AGENT = 'agent';
+    public const OBJECT_AGENT_SESSION = 'agent_session';
     public const OBJECT_AGENT_META = 'agent_meta';
     public const OBJECT_PRESENCE = 'presence';
     public const OBJECT_ROUTE = 'route';

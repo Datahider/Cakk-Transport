@@ -451,6 +451,9 @@ Response:
 ```json
 {
   "ok": true,
+  "after_id": 0,
+  "latest_update_id": 1,
+  "has_more": false,
   "items": [
     {
       "update_id": 1,
@@ -462,6 +465,11 @@ Response:
   ]
 }
 ```
+
+Fields:
+- `after_id` — echoed request cursor
+- `latest_update_id` — last returned update id, or original `after_id` when page is empty
+- `has_more` — `true` when server truncated the page by `limit`
 
 ## Lazy sync contract
 

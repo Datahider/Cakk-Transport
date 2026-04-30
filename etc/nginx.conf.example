@@ -13,6 +13,7 @@ server {
         include fastcgi_params;
         fastcgi_param SCRIPT_FILENAME $document_root/index.php;
         fastcgi_param SCRIPT_NAME /index.php;
+        fastcgi_param HTTP_AUTHORIZATION $http_authorization;
         fastcgi_pass unix:/run/php/php8.3-fpm.sock;
         fastcgi_read_timeout 60s;
         fastcgi_buffering off;
@@ -22,6 +23,7 @@ server {
         include fastcgi_params;
         fastcgi_param SCRIPT_FILENAME $document_root/index.php;
         fastcgi_param SCRIPT_NAME /index.php;
+        fastcgi_param HTTP_AUTHORIZATION $http_authorization;
         fastcgi_pass unix:/run/php/php8.3-fpm.sock;
         fastcgi_read_timeout 60s;
         fastcgi_buffering off;

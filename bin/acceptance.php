@@ -911,11 +911,22 @@ final class AcceptanceRunner
         $systemUpdates = $this->json('GET', '/updates?after_id=0&limit=500', null, $this->token('sys1'));
         $this->assertStatus($systemUpdates, 200);
         $this->assertTrue(count($systemUpdates['json']['items'] ?? []) > 0, 'system sees zone updates');
+        $updateKinds = array_map(
+            static fn (array $item): string => (string) ($item['kind'] ?? ''),
+            $systemUpdates['json']['items'] ?? []
+        );
+        $this->assertTrue(in_array('agent_registered', $updateKinds, true), 'registration appears in updates');
         $this->context['updates_after']['sys1'] = (int) ($systemUpdates['json']['latest_update_id'] ?? 0);
 
         $zone2Updates = $this->json('GET', '/updates?after_id=0&limit=500', null, $this->token('sys2'));
         $this->assertStatus($zone2Updates, 200);
-        $this->assertSame([], $zone2Updates['json']['items'] ?? null, 'other zone sees no foreign updates');
+        $zone2Items = $zone2Updates['json']['items'] ?? [];
+        $this->assertTrue(count($zone2Items) > 0, 'second zone sees its own updates');
+        $zone2Only = array_filter(
+            $zone2Items,
+            fn (array $item): bool => ($item['zone'] ?? null) === $this->context['zones']['z2']
+        );
+        $this->assertSame(count($zone2Items), count($zone2Only), 'other zone sees no foreign updates');
 
         $systemRoutesSyncDenied = $this->json('POST', '/sync/routes', [
             'skip' => 0,

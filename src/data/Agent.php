@@ -11,7 +11,7 @@ final class Agent extends UpdatableTransportDBObject
     public const METADATA = [
         'id' => 'BIGINT UNSIGNED NOT NULL AUTO_INCREMENT',
         'zone' => 'CHAR(36) NOT NULL DEFAULT "00000000-0000-0000-0000-000000000000"',
-        'is_system' => 'TINYINT(1) NOT NULL DEFAULT 0',
+        'is_system' => 'TINYINT(1) NULL',
         'password_hash' => 'VARCHAR(255) NOT NULL',
         'created_at' => 'DATETIME(6) NOT NULL',
         'updated_at' => 'DATETIME(6) NOT NULL',
@@ -19,5 +19,22 @@ final class Agent extends UpdatableTransportDBObject
         'PRIMARY KEY' => 'id',
         'INDEX zone' => 'zone',
         'INDEX revision' => 'revision',
+        'UNIQUE INDEX zone_system' => ['zone', 'is_system'] 
     ];
+    
+    #[\Override]
+    public function __get($name) {
+        if ($name == 'is_system') {
+            return (bool)parent::__get($name);
+        }
+        return parent::__get($name);
+    }
+    
+    #[\Override]
+    public function __set($name, $value) {
+        if ($name == 'is_system' && !$value) {
+            $value = null;
+        }
+        parent::__set($name, $value);
+    }
 }
