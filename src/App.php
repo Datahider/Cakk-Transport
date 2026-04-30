@@ -743,15 +743,23 @@ final class App
     private function listRoutes(Agent $actor): array
     {
         $metaSelector = $this->readMetaSelector();
-        $list = $this->dbList(
-            Route::class,
-            'id IN (
-                SELECT f.id FROM [Route] f
-                INNER JOIN [Subscription] fm ON fm.route_id = f.id
-                WHERE fm.agent_id = ? AND f.is_deleted = 0
-            ) ORDER BY revision DESC, id DESC',
-            [(int) $actor->id]
-        );
+        if ((bool) $actor->is_system) {
+            $list = $this->dbList(
+                Route::class,
+                'zone = ? AND is_deleted = 0 ORDER BY revision DESC, id DESC',
+                [(string) $actor->zone]
+            );
+        } else {
+            $list = $this->dbList(
+                Route::class,
+                'id IN (
+                    SELECT f.id FROM [Route] f
+                    INNER JOIN [Subscription] fm ON fm.route_id = f.id
+                    WHERE fm.agent_id = ? AND f.is_deleted = 0
+                ) ORDER BY revision DESC, id DESC',
+                [(int) $actor->id]
+            );
+        }
 
         $items = [];
         while ($route = $list->next()) {
@@ -1593,6 +1601,9 @@ final class App
     private function loadVisibleAgentById(Agent $requestActor, string $actorId): Agent
     {
         $target = $this->loadAgentByIdInZone($requestActor, $actorId);
+        if ((bool) $requestActor->is_system) {
+            return $target;
+        }
         if ((int) $target->id === (int) $requestActor->id) {
             return $target;
         }

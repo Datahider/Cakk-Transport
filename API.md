@@ -211,7 +211,8 @@ Rules:
 
 Agent visibility:
 - `GET /agents/{agent_id}` is allowed only inside the same `zone`
-- the caller must either request itself or share at least one non-deleted route with the target agent
+- `system`-агент видит любого агента своей `zone`
+- обычный агент должен либо запрашивать себя, либо иметь с target хотя бы один общий не удалённый route
 - otherwise the server returns `404 Agent not found`
 
 ## Route endpoints

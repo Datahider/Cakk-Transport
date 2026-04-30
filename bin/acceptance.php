@@ -346,6 +346,10 @@ final class AcceptanceRunner
         $this->assertStatus($listRoutesSubset, 200);
         $this->assertSame(['title' => 'Main route'], $this->findRouteMetaInList($listRoutesSubset, $this->routeId('main')), 'route list returns selected meta only');
 
+        $systemRouteList = $this->json('GET', '/routes?meta=title', null, $this->token('sys1'));
+        $this->assertStatus($systemRouteList, 200);
+        $this->assertSame(['title' => 'Main route'], $this->findRouteMetaInList($systemRouteList, $this->routeId('main')), 'system route list is zone-wide');
+
         $ownerCannotManage = $this->json('POST', '/routes/' . $this->routeId('main') . '/subscriptions', [
             'agent_id' => (string) $this->agentId('c'),
         ], $this->token('a'));
@@ -374,6 +378,10 @@ final class AcceptanceRunner
         $viewNonSharedAgent = $this->json('GET', '/agents/' . $this->agentId('c'), null, $this->token('a'));
         $this->assertStatus($viewNonSharedAgent, 404);
         $this->assertSame('Agent not found', $viewNonSharedAgent['json']['error'] ?? null, 'non-shared same-zone agent hidden');
+
+        $systemViewAgent = $this->json('GET', '/agents/' . $this->agentId('c'), null, $this->token('sys1'));
+        $this->assertStatus($systemViewAgent, 200);
+        $this->assertSame($this->agentId('c'), $systemViewAgent['json']['agent']['agent_id'] ?? null, 'system sees any same-zone agent');
 
         $viewCrossZoneAgent = $this->json('GET', '/agents/' . $this->agentId('z2user'), null, $this->token('a'));
         $this->assertStatus($viewCrossZoneAgent, 404);
