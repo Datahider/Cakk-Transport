@@ -1706,6 +1706,10 @@ final class App
     private function loadWritablePayload(Agent $actor, string $payloadId): Payload
     {
         $payload = $this->loadReadablePayload($actor, $payloadId);
+        if ((bool) $actor->is_system) {
+            return $payload;
+        }
+
         $lane = new Lane(['id' => (int) $payload->lane_id]);
         $route = new Route(['id' => (int) $lane->route_id]);
         $role = $this->routeRoleForAgent($actor, $route);
@@ -1728,6 +1732,10 @@ final class App
     private function loadUpdatablePayload(Agent $actor, string $payloadId): Payload
     {
         $payload = $this->loadReadablePayload($actor, $payloadId);
+        if ((bool) $actor->is_system) {
+            return $payload;
+        }
+
         $lane = new Lane(['id' => (int) $payload->lane_id]);
         $route = new Route(['id' => (int) $lane->route_id]);
         $role = $this->routeRoleForAgent($actor, $route);
@@ -1976,6 +1984,10 @@ final class App
         }
 
         $payload = $this->loadReadablePayload($actor, (string) $payloadMeta->payload_id);
+        if ((bool) $actor->is_system) {
+            return $payloadMeta;
+        }
+
         if ((int) $payloadMeta->agent_id === (int) $actor->id) {
             return $payloadMeta;
         }

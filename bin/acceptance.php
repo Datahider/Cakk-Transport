@@ -466,6 +466,12 @@ final class AcceptanceRunner
         $this->assertStatus($publisherDenied, 403);
         $this->assertSame('Agent cannot update route meta', $publisherDenied['json']['error'] ?? null, 'publisher cannot create route meta');
 
+        $systemPatchMain = $this->json('PATCH', '/routes/' . $this->routeId('main') . '/meta', [
+            'meta' => ['ops_note' => 'system-touch'],
+        ], $this->token('sys1'));
+        $this->assertStatus($systemPatchMain, 200);
+        $this->assertSame('system-touch', $systemPatchMain['json']['meta']['ops_note'] ?? null, 'system can patch foreign route meta');
+
         $create = $this->json('POST', '/routes/' . $this->routeId('system') . '/meta', [
             'meta' => ['title' => 'System route', 'avatar' => 'system.png', 'kind' => 'ops'],
         ], $this->token('sys1'));
@@ -513,6 +519,16 @@ final class AcceptanceRunner
         $systemLanes = $this->json('GET', '/routes/' . $this->routeId('main') . '/lanes', null, $this->token('sys1'));
         $this->assertStatus($systemLanes, 200);
         $this->assertTrue(count($systemLanes['json']['items'] ?? []) === 1, 'system can list lanes on foreign route');
+
+        $systemCreateLane = $this->json('POST', '/routes/' . $this->routeId('main') . '/lanes', [], $this->token('sys1'));
+        $this->assertStatus($systemCreateLane, 200);
+        $this->rememberLane('system_extra', $systemCreateLane);
+
+        $systemCreateLaneMeta = $this->json('POST', '/lanes/' . $this->laneId('system_extra') . '/meta', [
+            'meta' => ['title' => 'System extra lane'],
+        ], $this->token('sys1'));
+        $this->assertStatus($systemCreateLaneMeta, 200);
+        $this->assertSame('System extra lane', $systemCreateLaneMeta['json']['meta']['title'] ?? null, 'system can create foreign lane meta');
 
         $publisherLaneCreateDenied = $this->json('POST', '/routes/' . $this->routeId('main') . '/lanes', [], $this->token('b'));
         $this->assertStatus($publisherLaneCreateDenied, 403);
@@ -661,6 +677,19 @@ final class AcceptanceRunner
         $this->assertStatus($systemBody, 200);
         $this->assertSame('hello from a', $systemBody['body'], 'system can read foreign payload body');
 
+        $systemUpdateBody = $this->raw(
+            'PUT',
+            '/payloads/' . $this->payloadId('a1') . '/body',
+            'hello from system',
+            $this->token('sys1'),
+            ['Content-Type: application/octet-stream']
+        );
+        $this->assertStatus($systemUpdateBody, 200);
+
+        $bodyAfterSystemUpdate = $this->raw('GET', '/payloads/' . $this->payloadId('a1') . '/body', null, $this->token('a'));
+        $this->assertStatus($bodyAfterSystemUpdate, 200);
+        $this->assertSame('hello from system', $bodyAfterSystemUpdate['body'], 'system can update foreign payload body');
+
         $crossZoneRead = $this->raw('GET', '/payloads/' . $this->payloadId('a1') . '/body', null, $this->token('z2user'));
         $this->assertStatus($crossZoneRead, 404);
         $this->assertSame('Lane not found', $crossZoneRead['json']['error'] ?? null, 'cross-zone payload read blocked');
@@ -775,6 +804,12 @@ final class AcceptanceRunner
         ], $this->token('c'));
         $this->assertStatus($adminPatch, 200);
         $this->assertSame('love', $adminPatch['json']['payload_meta']['meta']['reaction'] ?? null, 'admin can patch foreign payload meta');
+
+        $systemPatch = $this->json('PATCH', '/payload-meta/' . $this->payloadMetaId('b_reaction'), [
+            'meta' => ['reaction' => 'system-love'],
+        ], $this->token('sys1'));
+        $this->assertStatus($systemPatch, 200);
+        $this->assertSame('system-love', $systemPatch['json']['payload_meta']['meta']['reaction'] ?? null, 'system can patch foreign payload meta');
 
         $put = $this->json('PUT', '/payload-meta/' . $this->payloadMetaId('b_reaction'), [
             'meta' => ['reaction' => 'wow'],
