@@ -173,6 +173,11 @@ final class App
                 }
             }
 
+            if (preg_match('#^/routes/([^/]+)/subscriptions/([^/]+)$#', $path, $matches) === 1 && $method === 'DELETE') {
+                $this->respond($this->deleteRouteSubscription($actor, rawurldecode($matches[1]), rawurldecode($matches[2])));
+                return;
+            }
+
             if (preg_match('#^/routes/([^/]+)/lanes$#', $path, $matches) === 1) {
                 $routePublicId = rawurldecode($matches[1]);
                 if ($method === 'GET') {
@@ -844,6 +849,57 @@ final class App
                 'joined_at' => $this->formatDateTime($membership->created_at),
             ],
         ];
+    }
+
+    private function deleteRouteSubscription(Agent $actor, string $routePublicId, string $targetPublicId): array
+    {
+        if (!(bool) $actor->is_system) {
+            $this->error(403, 'Only system agent can remove route members');
+        }
+
+        $route = $this->loadRouteInZone($actor, $routePublicId);
+
+        try {
+            $target = $this->loadAgentByIdInZone($actor, $targetPublicId);
+        } catch (Exception $error) {
+            $this->error(404, 'Subscription not found');
+        }
+
+        $subscription = $this->dbList(
+            Subscription::class,
+            ['route_id' => (int) $route->id, 'agent_id' => (int) $target->id]
+        )->next();
+
+        if (!$subscription instanceof Subscription) {
+            $this->error(404, 'Subscription not found');
+        }
+
+        if ((int) $subscription->agent_id === (int) $route->owner_agent_id) {
+            $this->error(422, 'Route owner subscription cannot be deleted');
+        }
+
+        $transaction = $this->beginTransportMutation($actor, [
+            TransportTransaction::OBJECT_SUBSCRIPTION,
+            TransportTransaction::OBJECT_ROUTE,
+        ]);
+        try {
+            $transaction->delete(TransportTransaction::OBJECT_SUBSCRIPTION, $subscription);
+            $transaction->updateLog('subscription_removed', [
+                TransportTransaction::OBJECT_SUBSCRIPTION,
+                TransportTransaction::OBJECT_ROUTE,
+            ], [
+                'route_id' => (int) $route->id,
+                'agent_id' => (int) $target->id,
+            ], [
+                'route_id' => (int) $route->id,
+            ]);
+            $transaction->commit();
+        } catch (Throwable $error) {
+            $transaction->rollBack();
+            throw $error;
+        }
+
+        return ['ok' => true];
     }
 
     private function listLanes(Agent $actor, string $routePublicId): array
@@ -1557,6 +1613,9 @@ final class App
     private function loadRouteForMember(Agent $actor, string $routePublicId): Route
     {
         $route = $this->loadRouteInZone($actor, $routePublicId);
+        if ((bool) $actor->is_system) {
+            return $route;
+        }
 
         $membership = $this->dbList(
             Subscription::class,
@@ -1616,6 +1675,9 @@ final class App
         }
 
         $route = new Route(['id' => (int) $lane->route_id]);
+        if ((string) $route->zone !== (string) $actor->zone) {
+            $this->error(404, 'Lane not found');
+        }
         $this->loadRouteForMember($actor, (string) $route->id);
 
         return $lane;
@@ -2083,6 +2145,9 @@ final class App
 
     private function assertHasMaxRouteRole(Agent $actor, Route $route): void
     {
+        if ((bool) $actor->is_system) {
+            return;
+        }
         if (!$this->agentHasMaxRouteRole($actor, $route)) {
             $this->error(403, 'Agent does not have maximal route role');
         }
@@ -2090,6 +2155,9 @@ final class App
 
     private function assertCanCreateLane(Agent $actor, Route $route): void
     {
+        if ((bool) $actor->is_system) {
+            return;
+        }
         if (!$this->isRoleAtLeast($this->routeRoleForAgent($actor, $route), Subscription::ROLE_ADMIN)) {
             $this->error(403, 'Agent cannot create lanes in this route');
         }
@@ -2097,6 +2165,9 @@ final class App
 
     private function assertCanCreatePayload(Agent $actor, Route $route): void
     {
+        if ((bool) $actor->is_system) {
+            return;
+        }
         if (!$this->isRoleAtLeast($this->routeRoleForAgent($actor, $route), Subscription::ROLE_PUBLISHER)) {
             $this->error(403, 'Agent cannot post messages in this route');
         }
@@ -2104,6 +2175,9 @@ final class App
 
     private function assertCanManageRouteMeta(Agent $actor, Route $route): void
     {
+        if ((bool) $actor->is_system) {
+            return;
+        }
         if (!$this->isRoleAtLeast($this->routeRoleForAgent($actor, $route), Subscription::ROLE_ADMIN)) {
             $this->error(403, 'Agent cannot update route meta');
         }
@@ -2111,6 +2185,9 @@ final class App
 
     private function assertCanManageLaneMeta(Agent $actor, Route $route): void
     {
+        if ((bool) $actor->is_system) {
+            return;
+        }
         if (!$this->isRoleAtLeast($this->routeRoleForAgent($actor, $route), Subscription::ROLE_ADMIN)) {
             $this->error(403, 'Agent cannot update lane meta');
         }

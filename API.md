@@ -270,10 +270,14 @@ Route meta:
 Subscriptions:
 - `GET /routes/{route_id}/subscriptions`
 - `POST /routes/{route_id}/subscriptions`
+- `DELETE /routes/{route_id}/subscriptions/{agent_id}`
 
 Membership policy:
 - `POST /routes/{route_id}/subscriptions` is allowed only for `system`-agent of the same zone
+- `DELETE /routes/{route_id}/subscriptions/{agent_id}` is allowed only for `system`-agent of the same zone
 - ordinary agents cannot add route members through transport API
+- ordinary agents cannot remove route members through transport API
+- deleting owner subscription is supported by endpoint surface but returns explicit error
 
 `POST /routes/{route_id}/subscriptions` request:
 ```json
@@ -282,6 +286,11 @@ Membership policy:
   "role": "publisher"
 }
 ```
+
+`DELETE /routes/{route_id}/subscriptions/{agent_id}`:
+- removes target subscription from route
+- returns `404` if target agent is not subscribed to this route
+- returns explicit error if target subscription is route owner
 
 Roles:
 - `owner`

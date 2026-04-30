@@ -326,6 +326,10 @@ final class AcceptanceRunner
         $this->assertStatus($viewRoute, 200);
         $this->assertSame($this->routeId('main'), $viewRoute['json']['route']['route_id'] ?? null, 'view route works');
 
+        $systemViewRoute = $this->json('GET', '/routes/' . $this->routeId('main'), null, $this->token('sys1'));
+        $this->assertStatus($systemViewRoute, 200);
+        $this->assertSame($this->routeId('main'), $systemViewRoute['json']['route']['route_id'] ?? null, 'system can view foreign route in zone');
+
         $viewRouteSubset = $this->json('GET', '/routes/' . $this->routeId('main') . '?meta=title,avatar', null, $this->token('a'));
         $this->assertStatus($viewRouteSubset, 200);
         $this->assertSame(['title' => 'Main route', 'avatar' => 'route.png'], $viewRouteSubset['json']['route']['meta'] ?? null, 'route returns requested meta subset');
@@ -425,6 +429,21 @@ final class AcceptanceRunner
         ], $this->token('sys1'));
         $this->assertStatus($systemAddsPublisher, 200);
 
+        $ownerCannotDeleteMember = $this->json('DELETE', '/routes/' . $this->routeId('main') . '/subscriptions/' . $this->agentId('f'), null, $this->token('a'));
+        $this->assertStatus($ownerCannotDeleteMember, 403);
+        $this->assertSame('Only system agent can remove route members', $ownerCannotDeleteMember['json']['error'] ?? null, 'ordinary owner cannot remove members');
+
+        $systemDeleteMember = $this->json('DELETE', '/routes/' . $this->routeId('main') . '/subscriptions/' . $this->agentId('f'), null, $this->token('sys1'));
+        $this->assertStatus($systemDeleteMember, 200);
+
+        $deleteMissingMember = $this->json('DELETE', '/routes/' . $this->routeId('main') . '/subscriptions/' . $this->agentId('f'), null, $this->token('sys1'));
+        $this->assertStatus($deleteMissingMember, 404);
+        $this->assertSame('Subscription not found', $deleteMissingMember['json']['error'] ?? null, 'missing subscription delete rejected');
+
+        $deleteOwnerDenied = $this->json('DELETE', '/routes/' . $this->routeId('main') . '/subscriptions/' . $this->agentId('a'), null, $this->token('sys1'));
+        $this->assertStatus($deleteOwnerDenied, 422);
+        $this->assertSame('Route owner subscription cannot be deleted', $deleteOwnerDenied['json']['error'] ?? null, 'owner subscription delete rejected');
+
         $crossZoneMember = $this->json('POST', '/routes/' . $this->routeId('main') . '/subscriptions', [
             'agent_id' => (string) $this->agentId('z2user'),
             'role' => 'publisher',
@@ -490,6 +509,10 @@ final class AcceptanceRunner
         $lanes = $this->json('GET', '/routes/' . $this->routeId('main') . '/lanes', null, $this->token('a'));
         $this->assertStatus($lanes, 200);
         $this->assertTrue(count($lanes['json']['items'] ?? []) === 1, 'route starts with default lane');
+
+        $systemLanes = $this->json('GET', '/routes/' . $this->routeId('main') . '/lanes', null, $this->token('sys1'));
+        $this->assertStatus($systemLanes, 200);
+        $this->assertTrue(count($systemLanes['json']['items'] ?? []) === 1, 'system can list lanes on foreign route');
 
         $publisherLaneCreateDenied = $this->json('POST', '/routes/' . $this->routeId('main') . '/lanes', [], $this->token('b'));
         $this->assertStatus($publisherLaneCreateDenied, 403);
@@ -634,9 +657,13 @@ final class AcceptanceRunner
         $this->assertStatus($body, 200);
         $this->assertSame('hello from a', $body['body'], 'payload body roundtrip');
 
+        $systemBody = $this->raw('GET', '/payloads/' . $this->payloadId('a1') . '/body', null, $this->token('sys1'));
+        $this->assertStatus($systemBody, 200);
+        $this->assertSame('hello from a', $systemBody['body'], 'system can read foreign payload body');
+
         $crossZoneRead = $this->raw('GET', '/payloads/' . $this->payloadId('a1') . '/body', null, $this->token('z2user'));
         $this->assertStatus($crossZoneRead, 404);
-        $this->assertSame('Route not found', $crossZoneRead['json']['error'] ?? null, 'cross-zone payload read blocked');
+        $this->assertSame('Lane not found', $crossZoneRead['json']['error'] ?? null, 'cross-zone payload read blocked');
 
         $wrongLaneRead = $this->json('POST', '/lanes/' . $defaultLaneId . '/read', [
             'last_read_payload_id' => $this->payloadId('extra1'),
@@ -653,6 +680,10 @@ final class AcceptanceRunner
         $laneView = $this->json('GET', '/lanes/' . $defaultLaneId, null, $this->token('b'));
         $this->assertStatus($laneView, 200);
         $this->assertSame($this->payloadId('b1'), $laneView['json']['lane']['read_state']['last_read_payload_id'] ?? null, 'lane read_state visible');
+
+        $systemLaneView = $this->json('GET', '/lanes/' . $defaultLaneId, null, $this->token('sys1'));
+        $this->assertStatus($systemLaneView, 200);
+        $this->assertSame($defaultLaneId, $systemLaneView['json']['lane']['lane_id'] ?? null, 'system can view foreign lane');
 
         $publisherUpdateForeign = $this->raw(
             'PUT',
