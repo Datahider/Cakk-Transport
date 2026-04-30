@@ -210,7 +210,11 @@ Rules:
 Request:
 ```json
 {
-  "agent_ids": ["84", "96"]
+  "agent_ids": ["84", "96"],
+  "meta": {
+    "title": "Main route",
+    "avatar": "route.png"
+  }
 }
 ```
 
@@ -219,6 +223,7 @@ Meaning:
 - creates creator subscription automatically
 - creates subscriptions for all `agent_ids`
 - creates one default lane automatically
+- if `meta` is present, creates initial route meta in the same DB transaction as route creation
 
 Response:
 ```json
@@ -228,6 +233,13 @@ Response:
   "default_lane": { "...": "..." }
 }
 ```
+
+Route meta selector:
+- `GET /routes?meta=all` returns full route meta for every listed route
+- `GET /routes/{route_id}?meta=all` returns full route meta for that route
+- `GET /routes/{route_id}?meta=title` returns only `title`
+- `GET /routes/{route_id}?meta=title,avatar` returns only `title` and `avatar`
+- when `meta` query is omitted, route payload does not include `meta`
 
 Route meta:
 - `GET /routes/{route_id}/meta`

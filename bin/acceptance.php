@@ -304,6 +304,11 @@ final class AcceptanceRunner
 
         $routeMain = $this->json('POST', '/routes', [
             'agent_ids' => [(string) $this->agentId('b')],
+            'meta' => [
+                'title' => 'Main route',
+                'avatar' => 'route.png',
+                'kind' => 'overlay',
+            ],
         ], $this->token('a'));
         $this->assertStatus($routeMain, 200);
         $this->rememberRoute('main', $routeMain);
@@ -320,6 +325,22 @@ final class AcceptanceRunner
         $viewRoute = $this->json('GET', '/routes/' . $this->routeId('main'), null, $this->token('a'));
         $this->assertStatus($viewRoute, 200);
         $this->assertSame($this->routeId('main'), $viewRoute['json']['route']['route_id'] ?? null, 'view route works');
+
+        $viewRouteSubset = $this->json('GET', '/routes/' . $this->routeId('main') . '?meta=title,avatar', null, $this->token('a'));
+        $this->assertStatus($viewRouteSubset, 200);
+        $this->assertSame(['title' => 'Main route', 'avatar' => 'route.png'], $viewRouteSubset['json']['route']['meta'] ?? null, 'route returns requested meta subset');
+
+        $viewRouteAll = $this->json('GET', '/routes/' . $this->routeId('main') . '?meta=all', null, $this->token('a'));
+        $this->assertStatus($viewRouteAll, 200);
+        $this->assertSame([
+            'title' => 'Main route',
+            'avatar' => 'route.png',
+            'kind' => 'overlay',
+        ], $viewRouteAll['json']['route']['meta'] ?? null, 'route returns full meta with meta=all');
+
+        $listRoutesSubset = $this->json('GET', '/routes?meta=title', null, $this->token('a'));
+        $this->assertStatus($listRoutesSubset, 200);
+        $this->assertSame(['title' => 'Main route'], $this->findRouteMetaInList($listRoutesSubset, $this->routeId('main')), 'route list returns selected meta only');
 
         $subsInitial = $this->json('GET', '/routes/' . $this->routeId('main') . '/subscriptions', null, $this->token('a'));
         $this->assertStatus($subsInitial, 200);
@@ -394,7 +415,7 @@ final class AcceptanceRunner
     {
         $this->step('Route meta');
 
-        $missing = $this->json('GET', '/routes/' . $this->routeId('main') . '/meta', null, $this->token('a'));
+        $missing = $this->json('GET', '/routes/' . $this->routeId('system') . '/meta', null, $this->token('sys1'));
         $this->assertStatus($missing, 404);
         $this->assertSame('Route meta not found', $missing['json']['error'] ?? null, 'route meta initially missing');
 
@@ -404,42 +425,38 @@ final class AcceptanceRunner
         $this->assertStatus($publisherDenied, 403);
         $this->assertSame('Agent cannot update route meta', $publisherDenied['json']['error'] ?? null, 'publisher cannot create route meta');
 
-        $create = $this->json('POST', '/routes/' . $this->routeId('main') . '/meta', [
-            'meta' => ['title' => 'Main route', 'avatar' => 'route.png', 'kind' => 'overlay'],
-        ], $this->token('a'));
+        $create = $this->json('POST', '/routes/' . $this->routeId('system') . '/meta', [
+            'meta' => ['title' => 'System route', 'avatar' => 'system.png', 'kind' => 'ops'],
+        ], $this->token('sys1'));
         $this->assertStatus($create, 200);
 
-        $duplicate = $this->json('POST', '/routes/' . $this->routeId('main') . '/meta', [
+        $duplicate = $this->json('POST', '/routes/' . $this->routeId('system') . '/meta', [
             'meta' => ['title' => 'again'],
-        ], $this->token('a'));
+        ], $this->token('sys1'));
         $this->assertStatus($duplicate, 409);
         $this->assertSame('Route meta already exists', $duplicate['json']['error'] ?? null, 'duplicate route meta rejected');
 
-        $view = $this->json('GET', '/routes/' . $this->routeId('main') . '?meta=title,avatar', null, $this->token('a'));
-        $this->assertStatus($view, 200);
-        $this->assertSame(['title' => 'Main route', 'avatar' => 'route.png'], $view['json']['route']['meta'] ?? null, 'route meta selector');
-
-        $replace = $this->json('PUT', '/routes/' . $this->routeId('main') . '/meta', [
-            'meta' => ['title' => 'Main route 2', 'status' => 'active'],
-        ], $this->token('c'));
+        $replace = $this->json('PUT', '/routes/' . $this->routeId('system') . '/meta', [
+            'meta' => ['title' => 'System route 2', 'status' => 'active'],
+        ], $this->token('sys1'));
         $this->assertStatus($replace, 200);
 
-        $patch = $this->json('PATCH', '/routes/' . $this->routeId('main') . '/meta', [
+        $patch = $this->json('PATCH', '/routes/' . $this->routeId('system') . '/meta', [
             'meta' => ['avatar' => 'route-2.png'],
-        ], $this->token('c'));
+        ], $this->token('sys1'));
         $this->assertStatus($patch, 200);
 
-        $deleteKey = $this->json('DELETE', '/routes/' . $this->routeId('main') . '/meta?keys=avatar', null, $this->token('c'));
+        $deleteKey = $this->json('DELETE', '/routes/' . $this->routeId('system') . '/meta?keys=avatar', null, $this->token('sys1'));
         $this->assertStatus($deleteKey, 200);
         $this->assertTrue(!array_key_exists('avatar', $deleteKey['json']['meta'] ?? []), 'route meta key deleted');
 
-        $deleteAll = $this->json('DELETE', '/routes/' . $this->routeId('main') . '/meta', null, $this->token('a'));
+        $deleteAll = $this->json('DELETE', '/routes/' . $this->routeId('system') . '/meta', null, $this->token('sys1'));
         $this->assertStatus($deleteAll, 200);
         $this->assertSame([], $deleteAll['json']['meta'] ?? null, 'route meta fully deleted');
 
-        $putMissing = $this->json('PUT', '/routes/' . $this->routeId('main') . '/meta', [
+        $putMissing = $this->json('PUT', '/routes/' . $this->routeId('system') . '/meta', [
             'meta' => ['title' => 'restored'],
-        ], $this->token('a'));
+        ], $this->token('sys1'));
         $this->assertStatus($putMissing, 404);
         $this->assertSame('Route meta not found', $putMissing['json']['error'] ?? null, 'route put requires existing meta');
     }
@@ -758,7 +775,7 @@ final class AcceptanceRunner
         $this->assertStatus($routesStable, 200);
         $this->assertSame([], $routesStable['json']['items'] ?? null, 'routes sync skips matching revisions');
 
-        $routeMetaSync = $this->json('POST', '/routes/' . $this->routeId('main') . '/meta', [
+        $routeMetaSync = $this->json('PATCH', '/routes/' . $this->routeId('main') . '/meta', [
             'meta' => ['sync_title' => 'Main route sync'],
         ], $this->token('a'));
         $this->assertStatus($routeMetaSync, 200);
@@ -1225,6 +1242,24 @@ final class AcceptanceRunner
     {
         $this->context['routes'][$label] = (int) $response['json']['route']['route_id'];
         $this->context['lanes'][$label . '_default'] = (int) $response['json']['default_lane']['lane_id'];
+    }
+
+    /**
+     * @param array{json:array<string,mixed>} $response
+     * @return array<string,string>|null
+     */
+    private function findRouteMetaInList(array $response, int $routeId): ?array
+    {
+        foreach (($response['json']['items'] ?? []) as $item) {
+            if ((int) ($item['route_id'] ?? 0) !== $routeId) {
+                continue;
+            }
+
+            $meta = $item['meta'] ?? null;
+            return is_array($meta) ? $meta : null;
+        }
+
+        return null;
     }
 
     private function rememberLane(string $label, array $response): void

@@ -533,6 +533,7 @@ final class App
     private function createRoute(Agent $actor): array
     {
         $payload = $this->readJsonBody();
+        $meta = $this->extractMeta($payload);
         $subscriberIds = array_values(array_filter(
             is_array($payload['agent_ids'] ?? null) ? $payload['agent_ids'] : [],
             static fn (mixed $item): bool => is_string($item) && trim($item) !== ''
@@ -542,11 +543,16 @@ final class App
             $subscriberIds
         );
 
-        $transaction = $this->beginTransportMutation($actor, [
+        $allowedKinds = [
             TransportTransaction::OBJECT_ROUTE,
             TransportTransaction::OBJECT_SUBSCRIPTION,
             TransportTransaction::OBJECT_LANE,
-        ]);
+        ];
+        if ($meta !== []) {
+            $allowedKinds[] = TransportTransaction::OBJECT_ROUTE_META;
+        }
+
+        $transaction = $this->beginTransportMutation($actor, $allowedKinds);
         try {
             $route = new Route();
             $route->zone = (string) $actor->zone;
@@ -570,14 +576,30 @@ final class App
             }
 
             $defaultLane = $this->createDefaultLane($transaction, $route, $actor);
-            $transaction->updateLog('route_created', [
+            if ($meta !== []) {
+                $now = $this->now();
+                $this->syncMetaRecords($transaction, RouteMeta::class, ['route_id' => (int) $route->id], 'meta_key', 'meta_value', $meta, true, [
+                    'route_id' => (int) $route->id,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                    'revision' => $now,
+                ]);
+            }
+
+            $coveredKinds = [
                 TransportTransaction::OBJECT_ROUTE,
                 TransportTransaction::OBJECT_SUBSCRIPTION,
                 TransportTransaction::OBJECT_LANE,
-            ], [
+            ];
+            if ($meta !== []) {
+                $coveredKinds[] = TransportTransaction::OBJECT_ROUTE_META;
+            }
+
+            $transaction->updateLog('route_created', $coveredKinds, [
                 'route_id' => (int) $route->id,
                 'default_lane_id' => (int) $defaultLane->id,
                 'member_agent_ids' => array_merge([(int) $actor->id], $subscriberIds),
+                'meta_keys' => array_keys($meta),
             ], [
                 'route_id' => (int) $route->id,
                 'lane_id' => (int) $defaultLane->id,
