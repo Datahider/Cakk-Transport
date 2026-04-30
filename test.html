@@ -366,7 +366,7 @@
     <section class="main-grid">
       <section class="panel">
         <div class="panel-header">
-          <h2>System Updates</h2>
+          <h2>System</h2>
           <div class="buttons">
             <button class="secondary" id="system-poll-once">poll once</button>
             <button class="signal" id="system-toggle">pause auto poll</button>
@@ -396,6 +396,40 @@
 
           <div class="hint">
             Auto-poll продолжает читать <code>/updates</code> с сохранённого <code>after_id</code>. После паузы можно включить обратно и посмотреть, как восстанавливается поток.
+          </div>
+
+          <div class="card-block">
+            <div class="status" id="system-request-status">idle</div>
+
+            <div class="controls">
+              <label>
+                Endpoint
+                <select id="system-endpoint"></select>
+              </label>
+              <label>
+                Content-Type
+                <input id="system-content-type" readonly>
+              </label>
+            </div>
+
+            <div class="kv">
+              <div class="kv-row"><strong>Method</strong><span id="system-method">-</span></div>
+              <div class="kv-row">
+                <strong>Path</strong>
+                <input id="system-path" value="/">
+              </div>
+            </div>
+
+            <label>
+              Request body
+              <textarea id="system-body"></textarea>
+            </label>
+
+            <div class="buttons">
+              <button class="accent" id="system-send">send request</button>
+            </div>
+
+            <pre class="response" id="system-response"></pre>
           </div>
 
           <pre class="log" id="system-log"></pre>
@@ -563,6 +597,54 @@
         bodyTemplate: "",
       },
       {
+        id: "agent-get",
+        label: "GET /agents/{agent_id}",
+        method: "GET",
+        path: "/agents/{agent_id}",
+        contentType: "application/json",
+        bodyTemplate: "",
+      },
+      {
+        id: "agent-meta-get",
+        label: "GET /agents/{agent_id}/meta",
+        method: "GET",
+        path: "/agents/{agent_id}/meta",
+        contentType: "application/json",
+        bodyTemplate: "",
+      },
+      {
+        id: "agent-meta-post",
+        label: "POST /agents/{agent_id}/meta",
+        method: "POST",
+        path: "/agents/{agent_id}/meta",
+        contentType: "application/json",
+        bodyTemplate: prettyJson({ meta: { ops_note: "watch", priority: "high" } }),
+      },
+      {
+        id: "agent-meta-put",
+        label: "PUT /agents/{agent_id}/meta",
+        method: "PUT",
+        path: "/agents/{agent_id}/meta",
+        contentType: "application/json",
+        bodyTemplate: prettyJson({ meta: { ops_note: "replace" } }),
+      },
+      {
+        id: "agent-meta-patch",
+        label: "PATCH /agents/{agent_id}/meta",
+        method: "PATCH",
+        path: "/agents/{agent_id}/meta",
+        contentType: "application/json",
+        bodyTemplate: prettyJson({ meta: { priority: "urgent" } }),
+      },
+      {
+        id: "agent-meta-delete",
+        label: "DELETE /agents/{agent_id}/meta?keys=priority",
+        method: "DELETE",
+        path: "/agents/{agent_id}/meta?keys=priority",
+        contentType: "application/json",
+        bodyTemplate: "",
+      },
+      {
         id: "routes-list",
         label: "GET /routes",
         method: "GET",
@@ -641,6 +723,38 @@
         path: "/routes/{route_id}/subscriptions",
         contentType: "application/json",
         bodyTemplate: prettyJson({ agent_id: 0, role: "publisher" }),
+      },
+      {
+        id: "subscription-get",
+        label: "GET /routes/{route_id}/subscriptions/{agent_id}",
+        method: "GET",
+        path: "/routes/{route_id}/subscriptions/{agent_id}",
+        contentType: "application/json",
+        bodyTemplate: "",
+      },
+      {
+        id: "subscription-put",
+        label: "PUT /routes/{route_id}/subscriptions/{agent_id}",
+        method: "PUT",
+        path: "/routes/{route_id}/subscriptions/{agent_id}",
+        contentType: "application/json",
+        bodyTemplate: prettyJson({ role: "editor" }),
+      },
+      {
+        id: "subscription-patch",
+        label: "PATCH /routes/{route_id}/subscriptions/{agent_id}",
+        method: "PATCH",
+        path: "/routes/{route_id}/subscriptions/{agent_id}",
+        contentType: "application/json",
+        bodyTemplate: prettyJson({ role: "publisher" }),
+      },
+      {
+        id: "subscription-delete",
+        label: "DELETE /routes/{route_id}/subscriptions/{agent_id}",
+        method: "DELETE",
+        path: "/routes/{route_id}/subscriptions/{agent_id}",
+        contentType: "application/json",
+        bodyTemplate: "",
       },
       {
         id: "lanes-list",
@@ -840,6 +954,12 @@
       node.className = isWarn ? "status warn" : "status";
     }
 
+    function setSystemRequestStatus(text, isWarn = false) {
+      const node = $("system-request-status");
+      node.textContent = text;
+      node.className = isWarn ? "status warn" : "status";
+    }
+
     function formatToken(token) {
       if (!token) return "-";
       if (token.length <= 28) return token;
@@ -880,8 +1000,8 @@
       $(`agent-${agentKey}-token`).textContent = formatToken(agent.token);
     }
 
-    function initEndpointSelect(agentKey) {
-      const select = $(`agent-${agentKey}-endpoint`);
+    function initClientEndpointSelect(clientKey) {
+      const select = $(`${clientKey}-endpoint`);
       select.innerHTML = "";
       for (const preset of endpointPresets) {
         const option = document.createElement("option");
@@ -889,7 +1009,7 @@
         option.textContent = preset.label;
         select.appendChild(option);
       }
-      applyPreset(agentKey, endpointPresets[0].id);
+      applyClientPreset(clientKey, endpointPresets[0].id);
     }
 
     function getPreset(presetId) {
@@ -900,12 +1020,12 @@
       return preset;
     }
 
-    function applyPreset(agentKey, presetId) {
+    function applyClientPreset(clientKey, presetId) {
       const preset = getPreset(presetId);
-      $(`agent-${agentKey}-method`).textContent = preset.method;
-      $(`agent-${agentKey}-path`).value = preset.path;
-      $(`agent-${agentKey}-content-type`).value = preset.contentType;
-      $(`agent-${agentKey}-body`).value = preset.bodyTemplate;
+      $(`${clientKey}-method`).textContent = preset.method;
+      $(`${clientKey}-path`).value = preset.path;
+      $(`${clientKey}-content-type`).value = preset.contentType;
+      $(`${clientKey}-body`).value = preset.bodyTemplate;
     }
 
     function formatResponse(response, parsedBody, rawBody) {
@@ -990,8 +1110,10 @@
       state.agents.a = { agentId: null, password: "", token: "" };
       state.agents.b = { agentId: null, password: "", token: "" };
       $("system-log").textContent = "";
+      $("system-response").textContent = "";
       $("agent-a-response").textContent = "";
       $("agent-b-response").textContent = "";
+      setSystemRequestStatus("idle");
       setAgentStatus("a", "idle");
       setAgentStatus("b", "idle");
     }
@@ -1134,6 +1256,43 @@
       }
     }
 
+    async function sendSystemRequest() {
+      if (!state.system.token) {
+        setSystemRequestStatus("init required", true);
+        return;
+      }
+
+      const presetId = $("system-endpoint").value;
+      const preset = getPreset(presetId);
+      const path = $("system-path").value.trim();
+      const body = $("system-body").value;
+      const contentType = $("system-content-type").value;
+
+      if (!path) {
+        setSystemRequestStatus("path required", true);
+        return;
+      }
+
+      setSystemRequestStatus(`${preset.method} ${path}`);
+      try {
+        if (preset.method !== "GET" && contentType === "application/json") {
+          safeJsonParse(body);
+        }
+        const { response, parsedBody, rawBody } = await requestJson(
+          path,
+          preset.method,
+          state.system.token,
+          body,
+          contentType
+        );
+        $("system-response").textContent = formatResponse(response, parsedBody, rawBody);
+        setSystemRequestStatus(`done ${response.status}`, !response.ok);
+      } catch (error) {
+        $("system-response").textContent = String(error);
+        setSystemRequestStatus("request failed", true);
+      }
+    }
+
     function clearLogs() {
       state.system.log = [];
       state.system.itemCount = 0;
@@ -1142,14 +1301,18 @@
     }
 
     function bootstrapUi() {
-      initEndpointSelect("a");
-      initEndpointSelect("b");
+      initClientEndpointSelect("system");
+      initClientEndpointSelect("agent-a");
+      initClientEndpointSelect("agent-b");
 
+      $("system-endpoint").addEventListener("change", (event) => {
+        applyClientPreset("system", event.target.value);
+      });
       $("agent-a-endpoint").addEventListener("change", (event) => {
-        applyPreset("a", event.target.value);
+        applyClientPreset("agent-a", event.target.value);
       });
       $("agent-b-endpoint").addEventListener("change", (event) => {
-        applyPreset("b", event.target.value);
+        applyClientPreset("agent-b", event.target.value);
       });
 
       $("init-button").addEventListener("click", () => {
@@ -1166,12 +1329,14 @@
         }
       });
       $("system-toggle").addEventListener("click", toggleSystemPoll);
+      $("system-send").addEventListener("click", sendSystemRequest);
       $("agent-a-send").addEventListener("click", () => sendAgentRequest("a"));
       $("agent-b-send").addEventListener("click", () => sendAgentRequest("b"));
 
       renderSystemState();
       renderAgentState("a");
       renderAgentState("b");
+      setSystemRequestStatus("idle");
     }
 
     bootstrapUi();
