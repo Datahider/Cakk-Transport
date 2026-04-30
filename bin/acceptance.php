@@ -840,6 +840,30 @@ final class AcceptanceRunner
         $zone2Updates = $this->json('GET', '/updates?after_id=0&limit=500', null, $this->token('sys2'));
         $this->assertStatus($zone2Updates, 200);
         $this->assertSame([], $zone2Updates['json']['items'] ?? null, 'other zone sees no foreign updates');
+
+        $systemRoutesSyncDenied = $this->json('POST', '/sync/routes', [
+            'skip' => 0,
+            'limit' => 50,
+            'items' => [],
+        ], $this->token('sys1'));
+        $this->assertStatus($systemRoutesSyncDenied, 403);
+        $this->assertSame('System agent must use /updates instead of /sync', $systemRoutesSyncDenied['json']['error'] ?? null, 'system cannot use routes sync');
+
+        $systemLanesSyncDenied = $this->json('POST', '/sync/routes/' . $this->routeId('main') . '/lanes', [
+            'skip' => 0,
+            'limit' => 50,
+            'items' => [],
+        ], $this->token('sys1'));
+        $this->assertStatus($systemLanesSyncDenied, 403);
+        $this->assertSame('System agent must use /updates instead of /sync', $systemLanesSyncDenied['json']['error'] ?? null, 'system cannot use lane sync');
+
+        $systemPayloadSyncDenied = $this->json('POST', '/sync/lanes/' . $this->laneId('extra') . '/payloads', [
+            'skip' => 0,
+            'limit' => 50,
+            'items' => [],
+        ], $this->token('sys1'));
+        $this->assertStatus($systemPayloadSyncDenied, 403);
+        $this->assertSame('System agent must use /updates instead of /sync', $systemPayloadSyncDenied['json']['error'] ?? null, 'system cannot use payload sync');
     }
 
     private function scenarioIdealLazySyncContract(): void

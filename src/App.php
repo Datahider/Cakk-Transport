@@ -446,6 +446,7 @@ final class App
 
     private function syncRoutes(Agent $actor): array
     {
+        $this->assertSystemCannotUseSync($actor);
         $request = $this->readLazySyncRequest();
 
         return [
@@ -459,6 +460,7 @@ final class App
 
     private function syncRouteLanes(Agent $actor, string $routePublicId): array
     {
+        $this->assertSystemCannotUseSync($actor);
         $route = $this->loadRouteForMember($actor, $routePublicId);
         $request = $this->readLazySyncRequest();
 
@@ -473,6 +475,7 @@ final class App
 
     private function syncLanePayloads(Agent $actor, string $lanePublicId): array
     {
+        $this->assertSystemCannotUseSync($actor);
         $lane = $this->loadLaneForMember($actor, $lanePublicId);
         $request = $this->readLazySyncRequest();
 
@@ -2152,6 +2155,13 @@ final class App
     {
         if (!$this->isRoleAtLeast($this->routeRoleForAgent($actor, $route), Subscription::ROLE_ADMIN)) {
             $this->error(403, 'Agent cannot manage route members');
+        }
+    }
+
+    private function assertSystemCannotUseSync(Agent $actor): void
+    {
+        if ((bool) $actor->is_system) {
+            $this->error(403, 'System agent must use /updates instead of /sync');
         }
     }
 

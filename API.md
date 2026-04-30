@@ -437,6 +437,7 @@ Response:
 Raw updates:
 - `GET /updates?after_id=...` остаётся только для `system`-агента зоны
 - обычный клиент не использует `/updates` как primary sync path
+- `system`-агент не использует `/sync/...`; для него этот surface запрещён
 
 ### Endpoints
 
