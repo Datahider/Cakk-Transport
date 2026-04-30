@@ -6,138 +6,54 @@
   <title>cakk-transport test</title>
   <style>
     :root {
-      --bg: #f3efe7;
-      --panel: #fffaf0;
-      --line: #d8cdb9;
-      --ink: #201a14;
-      --muted: #6d6256;
-      --accent: #8b4b2c;
-      --accent-2: #2f6b5f;
+      --bg: #f1eee7;
+      --panel: rgba(255, 252, 246, 0.96);
+      --line: #d5ccbb;
+      --line-strong: #b4a58d;
+      --ink: #201a15;
+      --muted: #655b4f;
+      --accent: #b04f2f;
+      --accent-deep: #84371d;
+      --signal: #215c53;
+      --signal-soft: #dcebe8;
+      --warn: #7f251d;
+      --code: #161311;
+      --code-ink: #f6efe3;
     }
 
     * { box-sizing: border-box; }
+
     body {
       margin: 0;
-      font: 14px/1.4 "Iosevka", "JetBrains Mono", monospace;
+      font: 14px/1.45 "Iosevka", "JetBrains Mono", monospace;
       color: var(--ink);
       background:
-        radial-gradient(circle at top left, rgba(139, 75, 44, 0.15), transparent 30%),
-        radial-gradient(circle at top right, rgba(47, 107, 95, 0.16), transparent 24%),
-        var(--bg);
+        radial-gradient(circle at 0 0, rgba(176, 79, 47, 0.16), transparent 26%),
+        radial-gradient(circle at 100% 0, rgba(33, 92, 83, 0.14), transparent 24%),
+        linear-gradient(180deg, #f6f2eb 0%, var(--bg) 100%);
     }
 
-    .page {
-      max-width: 1680px;
-      margin: 0 auto;
-      padding: 20px;
-      display: grid;
-      gap: 16px;
-    }
-
-    .hero, .panel {
-      border: 1px solid var(--line);
-      background: var(--panel);
-      border-radius: 14px;
-      box-shadow: 0 12px 30px rgba(32, 26, 20, 0.08);
-    }
-
-    .hero {
-      padding: 18px 20px;
-      display: flex;
-      justify-content: space-between;
-      gap: 16px;
-      align-items: center;
-    }
-
-    .hero h1 {
-      margin: 0 0 4px;
-      font-size: 22px;
-    }
-
-    .hero p {
-      margin: 0;
-      color: var(--muted);
-    }
-
-    .grid {
-      display: grid;
-      gap: 16px;
-      grid-template-columns: 1.25fr 1fr;
-    }
-
-    .stack {
-      display: grid;
-      gap: 16px;
-    }
-
-    .logs {
-      display: grid;
-      gap: 16px;
-      grid-template-columns: repeat(3, 1fr);
-    }
-
-    .panel-header {
-      padding: 12px 14px;
-      border-bottom: 1px solid var(--line);
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 12px;
-    }
-
-    .panel-header h2, .panel-header h3 {
-      margin: 0;
-      font-size: 15px;
-    }
-
-    .panel-body {
-      padding: 14px;
-      display: grid;
-      gap: 12px;
-    }
-
-    .controls {
-      display: grid;
-      gap: 10px;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-
-    .controls.single {
-      grid-template-columns: 1fr;
-    }
-
-    label {
-      display: grid;
-      gap: 6px;
-      color: var(--muted);
-      font-size: 12px;
-    }
-
-    input, select, textarea, button {
+    button,
+    input,
+    select,
+    textarea {
       font: inherit;
     }
 
-    input, select, textarea {
-      width: 100%;
-      padding: 10px 11px;
-      border: 1px solid var(--line);
-      border-radius: 10px;
-      background: #fff;
-      color: var(--ink);
-    }
-
+    button,
+    input,
+    select,
     textarea {
-      min-height: 110px;
-      resize: vertical;
+      border: 1px solid var(--line);
+      border-radius: 12px;
     }
 
     button {
-      padding: 10px 12px;
-      border: 1px solid var(--ink);
-      border-radius: 10px;
+      cursor: pointer;
+      padding: 10px 14px;
       background: var(--ink);
       color: #fff;
-      cursor: pointer;
+      border-color: var(--ink);
     }
 
     button.secondary {
@@ -150,31 +66,169 @@
       border-color: var(--accent);
     }
 
-    button.green {
-      background: var(--accent-2);
-      border-color: var(--accent-2);
+    button.signal {
+      background: var(--signal);
+      border-color: var(--signal);
+    }
+
+    button:disabled {
+      opacity: 0.55;
+      cursor: default;
+    }
+
+    input,
+    select,
+    textarea {
+      width: 100%;
+      padding: 10px 11px;
+      background: #fff;
+      color: var(--ink);
+    }
+
+    textarea {
+      min-height: 150px;
+      resize: vertical;
+    }
+
+    code {
+      padding: 1px 5px;
+      border-radius: 6px;
+      background: rgba(32, 26, 21, 0.08);
+    }
+
+    .page {
+      max-width: 1840px;
+      margin: 0 auto;
+      padding: 20px;
+      display: grid;
+      gap: 16px;
+    }
+
+    .hero,
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--panel);
+      box-shadow: 0 16px 40px rgba(32, 26, 21, 0.08);
+      backdrop-filter: blur(8px);
+    }
+
+    .hero {
+      padding: 18px 20px;
+      display: flex;
+      justify-content: space-between;
+      gap: 18px;
+      align-items: flex-start;
+    }
+
+    .hero h1 {
+      margin: 0 0 6px;
+      font-size: 24px;
+    }
+
+    .hero p {
+      margin: 0;
+      color: var(--muted);
+      max-width: 760px;
+    }
+
+    .hero-actions {
+      min-width: 360px;
+      display: grid;
+      gap: 10px;
+      justify-items: end;
+    }
+
+    .hero-meta {
+      width: 100%;
+      display: grid;
+      gap: 8px;
+      text-align: right;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .hero-meta strong {
+      color: var(--ink);
+      font-size: 13px;
+    }
+
+    .main-grid {
+      display: grid;
+      gap: 16px;
+      grid-template-columns: 1.05fr 1fr 1fr;
+      align-items: start;
+    }
+
+    .panel-header {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .panel-header h2 {
+      margin: 0;
+      font-size: 16px;
+    }
+
+    .panel-body {
+      padding: 16px;
+      display: grid;
+      gap: 14px;
+    }
+
+    .controls {
+      display: grid;
+      gap: 10px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .controls.single {
+      grid-template-columns: 1fr;
+    }
+
+    .two-lines {
+      display: grid;
+      gap: 4px;
+    }
+
+    label {
+      display: grid;
+      gap: 6px;
+      color: var(--muted);
+      font-size: 12px;
     }
 
     .buttons {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .pill-row {
       display: flex;
       gap: 8px;
       flex-wrap: wrap;
     }
 
-    .logbox {
-      min-height: 420px;
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 10px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: #fff;
+      color: var(--muted);
+      font-size: 12px;
     }
 
-    pre {
-      margin: 0;
-      padding: 12px;
-      border-radius: 10px;
-      background: #171411;
-      color: #f3efe7;
-      min-height: 360px;
-      overflow: auto;
-      white-space: pre-wrap;
-      word-break: break-word;
+    .pill strong {
+      color: var(--ink);
+      font-size: 12px;
     }
 
     .hint {
@@ -183,13 +237,107 @@
     }
 
     .status {
-      color: var(--accent-2);
+      color: var(--signal);
+      font-size: 12px;
       font-weight: 700;
+    }
+
+    .status.warn {
+      color: var(--warn);
+    }
+
+    .kv {
+      display: grid;
+      gap: 8px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #fff;
+    }
+
+    .kv-row {
+      display: grid;
+      gap: 6px;
+      grid-template-columns: 92px 1fr;
+      align-items: start;
       font-size: 12px;
     }
 
-    @media (max-width: 1200px) {
-      .grid, .logs { grid-template-columns: 1fr; }
+    .kv-row strong {
+      color: var(--muted);
+      font-weight: 600;
+    }
+
+    .log,
+    .response {
+      margin: 0;
+      padding: 14px;
+      border-radius: 14px;
+      background: var(--code);
+      color: var(--code-ink);
+      overflow: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .log {
+      min-height: 620px;
+    }
+
+    .response {
+      min-height: 260px;
+    }
+
+    .card-block {
+      display: grid;
+      gap: 10px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #fff;
+    }
+
+    .meta-strip {
+      display: grid;
+      gap: 8px;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .meta-box {
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--signal-soft);
+      font-size: 12px;
+    }
+
+    .meta-box strong {
+      display: block;
+      margin-bottom: 4px;
+      color: var(--signal);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    @media (max-width: 1460px) {
+      .main-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .hero {
+        flex-direction: column;
+      }
+
+      .hero-actions {
+        min-width: 0;
+        width: 100%;
+        justify-items: start;
+      }
+
+      .hero-meta {
+        text-align: left;
+      }
     }
   </style>
 </head>
@@ -197,339 +345,836 @@
   <div class="page">
     <section class="hero">
       <div>
-        <h1>cakk-transport api test</h1>
-        <p>Поток zone system, два agent-state окна и ручной конструктор запросов.</p>
+        <h1>cakk-transport manual test bench</h1>
+        <p>
+          <code>Init</code> поднимает новую zone и регистрирует <code>system</code>, <code>agent A</code>, <code>agent B</code>.
+          Дальше system сам опрашивает <code>/updates</code>, а агенты вручную гоняют endpoint-ы из шаблонов.
+        </p>
       </div>
-      <div class="status" id="status">idle</div>
+      <div class="hero-actions">
+        <div class="buttons">
+          <button class="accent" id="init-button">init</button>
+          <button class="secondary" id="clear-logs">clear logs</button>
+        </div>
+        <div class="hero-meta">
+          <div><strong>Status:</strong> <span id="page-status">idle</span></div>
+          <div><strong>Zone:</strong> <span id="zone-value">not initialized</span></div>
+        </div>
+      </div>
     </section>
 
-    <section class="grid">
-      <div class="stack">
-        <section class="panel">
-          <div class="panel-header">
-            <h2>Agent Streams</h2>
-            <div class="buttons">
-              <button class="secondary" id="poll-once">poll once</button>
-              <button class="green" id="toggle-poll">pause auto poll</button>
-            </div>
+    <section class="main-grid">
+      <section class="panel">
+        <div class="panel-header">
+          <h2>System Updates</h2>
+          <div class="buttons">
+            <button class="secondary" id="system-poll-once">poll once</button>
+            <button class="signal" id="system-toggle">pause auto poll</button>
           </div>
-          <div class="panel-body">
-            <div class="controls">
-              <label>
-                System token
-                <input id="token-system" placeholder="sess_...">
-              </label>
-              <label>
-                Agent A token
-                <input id="token-a" placeholder="sess_...">
-              </label>
-              <label>
-                Agent B token
-                <input id="token-b" placeholder="sess_...">
-              </label>
-              <label>
-                System name
-                <input id="name-system" value="Zone System">
-              </label>
-              <label>
-                Agent A name
-                <input id="name-a" value="Agent A">
-              </label>
-              <label>
-                Agent B name
-                <input id="name-b" value="Agent B">
-              </label>
-            </div>
-            <div class="hint">Общий поток читается из <code>/updates</code> под system-агентом зоны.</div>
+        </div>
+        <div class="panel-body">
+          <div class="pill-row">
+            <div class="pill"><strong>mode</strong> <span id="system-mode">auto</span></div>
+            <div class="pill"><strong>after_id</strong> <span id="system-after-id">0</span></div>
+            <div class="pill"><strong>items</strong> <span id="system-items-count">0</span></div>
           </div>
-        </section>
 
-        <section class="panel">
-          <div class="panel-header">
-            <h2>Request Composer</h2>
-            <div class="buttons">
-              <button class="accent" id="send-request">send</button>
+          <div class="meta-strip">
+            <div class="meta-box">
+              <strong>system agent_id</strong>
+              <span id="system-agent-id">-</span>
+            </div>
+            <div class="meta-box">
+              <strong>system password</strong>
+              <span id="system-password">-</span>
+            </div>
+            <div class="meta-box">
+              <strong>system token</strong>
+              <span id="system-token">-</span>
             </div>
           </div>
-          <div class="panel-body">
-            <div class="controls">
-              <label>
-                Method
-                <select id="req-method">
-                  <option>GET</option>
-                  <option selected>POST</option>
-                  <option>DELETE</option>
-                </select>
-              </label>
-              <label>
-                Path
-                <input id="req-path" value="/register">
-              </label>
-              <label>
-                Auth source
-                <select id="auth-source">
-                  <option value="">no auth</option>
-                  <option value="system">System token</option>
-                  <option value="a">Agent A token</option>
-                  <option value="b">Agent B token</option>
-                  <option value="custom">custom token</option>
-                </select>
-              </label>
-              <label>
-                Content-Type
-                <select id="req-content-type">
-                  <option value="application/json" selected>application/json</option>
-                  <option value="application/octet-stream">application/octet-stream</option>
-                  <option value="text/plain">text/plain</option>
-                </select>
-              </label>
+
+          <div class="hint">
+            Auto-poll продолжает читать <code>/updates</code> с сохранённого <code>after_id</code>. После паузы можно включить обратно и посмотреть, как восстанавливается поток.
+          </div>
+
+          <pre class="log" id="system-log"></pre>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Agent A</h2>
+          <div class="status" id="agent-a-status">idle</div>
+        </div>
+        <div class="panel-body">
+          <div class="meta-strip">
+            <div class="meta-box">
+              <strong>agent_id</strong>
+              <span id="agent-a-id">-</span>
             </div>
-            <div class="controls single">
-              <label>
-                Custom token
-                <input id="custom-token" placeholder="sess_...">
-              </label>
-              <label>
-                Request body
-                <textarea id="req-body">{ "zone": "00000000-0000-0000-0000-000000000000", "device_label": "browser" }</textarea>
-              </label>
+            <div class="meta-box">
+              <strong>password</strong>
+              <span id="agent-a-password">-</span>
             </div>
-            <div class="buttons">
-              <button class="secondary" data-preset="register-a">preset: register A</button>
-              <button class="secondary" data-preset="register-b">preset: register B</button>
-              <button class="secondary" data-preset="register-system">preset: register system</button>
-              <button class="secondary" data-preset="login-a">preset: login A</button>
-              <button class="secondary" data-preset="create-route">preset: create route</button>
-              <button class="secondary" data-preset="post-payload">preset: post payload</button>
-              <button class="secondary" data-preset="mark-read">preset: mark read</button>
-              <button class="secondary" data-preset="post-meta">preset: post meta</button>
+            <div class="meta-box">
+              <strong>token</strong>
+              <span id="agent-a-token">-</span>
             </div>
           </div>
-        </section>
 
-        <section class="panel">
-          <div class="panel-header">
-            <h2>HTTP Result</h2>
+          <div class="controls">
+            <label>
+              Endpoint
+              <select id="agent-a-endpoint"></select>
+            </label>
+            <label>
+              Content-Type
+              <input id="agent-a-content-type" readonly>
+            </label>
           </div>
-          <div class="panel-body">
-            <pre id="response-log"></pre>
-          </div>
-        </section>
-      </div>
 
-      <div class="logs">
-        <section class="panel logbox">
-          <div class="panel-header">
-            <h3 id="title-system">Zone System Stream</h3>
+          <div class="kv">
+            <div class="kv-row"><strong>Method</strong><span id="agent-a-method">-</span></div>
+            <div class="kv-row">
+              <strong>Path</strong>
+              <input id="agent-a-path" value="/">
+            </div>
           </div>
-          <div class="panel-body">
-            <pre id="global-log"></pre>
-          </div>
-        </section>
 
-        <section class="panel logbox">
-          <div class="panel-header">
-            <h3 id="title-a">Agent A Stream</h3>
-          </div>
-          <div class="panel-body">
-            <pre id="agent-a-log"></pre>
-          </div>
-        </section>
+          <label>
+            Request body
+            <textarea id="agent-a-body"></textarea>
+          </label>
 
-        <section class="panel logbox">
-          <div class="panel-header">
-            <h3 id="title-b">Agent B Stream</h3>
+          <div class="buttons">
+            <button class="accent" id="agent-a-send">send request</button>
           </div>
-          <div class="panel-body">
-            <pre id="agent-b-log"></pre>
+
+          <pre class="response" id="agent-a-response"></pre>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Agent B</h2>
+          <div class="status" id="agent-b-status">idle</div>
+        </div>
+        <div class="panel-body">
+          <div class="meta-strip">
+            <div class="meta-box">
+              <strong>agent_id</strong>
+              <span id="agent-b-id">-</span>
+            </div>
+            <div class="meta-box">
+              <strong>password</strong>
+              <span id="agent-b-password">-</span>
+            </div>
+            <div class="meta-box">
+              <strong>token</strong>
+              <span id="agent-b-token">-</span>
+            </div>
           </div>
-        </section>
-      </div>
+
+          <div class="controls">
+            <label>
+              Endpoint
+              <select id="agent-b-endpoint"></select>
+            </label>
+            <label>
+              Content-Type
+              <input id="agent-b-content-type" readonly>
+            </label>
+          </div>
+
+          <div class="kv">
+            <div class="kv-row"><strong>Method</strong><span id="agent-b-method">-</span></div>
+            <div class="kv-row">
+              <strong>Path</strong>
+              <input id="agent-b-path" value="/">
+            </div>
+          </div>
+
+          <label>
+            Request body
+            <textarea id="agent-b-body"></textarea>
+          </label>
+
+          <div class="buttons">
+            <button class="accent" id="agent-b-send">send request</button>
+          </div>
+
+          <pre class="response" id="agent-b-response"></pre>
+        </div>
+      </section>
     </section>
   </div>
 
   <script>
+    const POLL_INTERVAL_MS = 2000;
+
+    const endpointPresets = [
+      {
+        id: "me",
+        label: "GET /me",
+        method: "GET",
+        path: "/me",
+        contentType: "application/json",
+        bodyTemplate: "",
+      },
+      {
+        id: "me-meta-get",
+        label: "GET /me/meta",
+        method: "GET",
+        path: "/me/meta",
+        contentType: "application/json",
+        bodyTemplate: "",
+      },
+      {
+        id: "me-meta-post",
+        label: "POST /me/meta",
+        method: "POST",
+        path: "/me/meta",
+        contentType: "application/json",
+        bodyTemplate: prettyJson({ meta: { title: "Agent", avatar: "https://example.test/avatar.png" } }),
+      },
+      {
+        id: "me-meta-put",
+        label: "PUT /me/meta",
+        method: "PUT",
+        path: "/me/meta",
+        contentType: "application/json",
+        bodyTemplate: prettyJson({ meta: { title: "Agent", avatar: "https://example.test/avatar.png" } }),
+      },
+      {
+        id: "me-meta-patch",
+        label: "PATCH /me/meta",
+        method: "PATCH",
+        path: "/me/meta",
+        contentType: "application/json",
+        bodyTemplate: prettyJson({ meta: { title: "Patched title" } }),
+      },
+      {
+        id: "me-meta-delete",
+        label: "DELETE /me/meta?keys=title",
+        method: "DELETE",
+        path: "/me/meta?keys=title",
+        contentType: "application/json",
+        bodyTemplate: "",
+      },
+      {
+        id: "routes-list",
+        label: "GET /routes",
+        method: "GET",
+        path: "/routes",
+        contentType: "application/json",
+        bodyTemplate: "",
+      },
+      {
+        id: "route-create",
+        label: "POST /routes",
+        method: "POST",
+        path: "/routes",
+        contentType: "application/json",
+        bodyTemplate: prettyJson({}),
+      },
+      {
+        id: "route-get",
+        label: "GET /routes/{route_id}",
+        method: "GET",
+        path: "/routes/{route_id}",
+        contentType: "application/json",
+        bodyTemplate: "",
+      },
+      {
+        id: "route-meta-get",
+        label: "GET /routes/{route_id}/meta",
+        method: "GET",
+        path: "/routes/{route_id}/meta",
+        contentType: "application/json",
+        bodyTemplate: "",
+      },
+      {
+        id: "route-meta-post",
+        label: "POST /routes/{route_id}/meta",
+        method: "POST",
+        path: "/routes/{route_id}/meta",
+        contentType: "application/json",
+        bodyTemplate: prettyJson({ meta: { title: "Route title" } }),
+      },
+      {
+        id: "route-meta-put",
+        label: "PUT /routes/{route_id}/meta",
+        method: "PUT",
+        path: "/routes/{route_id}/meta",
+        contentType: "application/json",
+        bodyTemplate: prettyJson({ meta: { title: "Route title" } }),
+      },
+      {
+        id: "route-meta-patch",
+        label: "PATCH /routes/{route_id}/meta",
+        method: "PATCH",
+        path: "/routes/{route_id}/meta",
+        contentType: "application/json",
+        bodyTemplate: prettyJson({ meta: { title: "Renamed route" } }),
+      },
+      {
+        id: "route-meta-delete",
+        label: "DELETE /routes/{route_id}/meta?keys=title",
+        method: "DELETE",
+        path: "/routes/{route_id}/meta?keys=title",
+        contentType: "application/json",
+        bodyTemplate: "",
+      },
+      {
+        id: "subscriptions-list",
+        label: "GET /routes/{route_id}/subscriptions",
+        method: "GET",
+        path: "/routes/{route_id}/subscriptions",
+        contentType: "application/json",
+        bodyTemplate: "",
+      },
+      {
+        id: "subscription-create",
+        label: "POST /routes/{route_id}/subscriptions",
+        method: "POST",
+        path: "/routes/{route_id}/subscriptions",
+        contentType: "application/json",
+        bodyTemplate: prettyJson({ agent_id: 0, role: "publisher" }),
+      },
+      {
+        id: "lanes-list",
+        label: "GET /routes/{route_id}/lanes",
+        method: "GET",
+        path: "/routes/{route_id}/lanes",
+        contentType: "application/json",
+        bodyTemplate: "",
+      },
+      {
+        id: "lane-create",
+        label: "POST /routes/{route_id}/lanes",
+        method: "POST",
+        path: "/routes/{route_id}/lanes",
+        contentType: "application/json",
+        bodyTemplate: prettyJson({}),
+      },
+      {
+        id: "lane-get",
+        label: "GET /lanes/{lane_id}",
+        method: "GET",
+        path: "/lanes/{lane_id}",
+        contentType: "application/json",
+        bodyTemplate: "",
+      },
+      {
+        id: "lane-meta-get",
+        label: "GET /lanes/{lane_id}/meta",
+        method: "GET",
+        path: "/lanes/{lane_id}/meta",
+        contentType: "application/json",
+        bodyTemplate: "",
+      },
+      {
+        id: "lane-meta-post",
+        label: "POST /lanes/{lane_id}/meta",
+        method: "POST",
+        path: "/lanes/{lane_id}/meta",
+        contentType: "application/json",
+        bodyTemplate: prettyJson({ meta: { title: "Lane title" } }),
+      },
+      {
+        id: "lane-meta-put",
+        label: "PUT /lanes/{lane_id}/meta",
+        method: "PUT",
+        path: "/lanes/{lane_id}/meta",
+        contentType: "application/json",
+        bodyTemplate: prettyJson({ meta: { title: "Lane title" } }),
+      },
+      {
+        id: "lane-meta-patch",
+        label: "PATCH /lanes/{lane_id}/meta",
+        method: "PATCH",
+        path: "/lanes/{lane_id}/meta",
+        contentType: "application/json",
+        bodyTemplate: prettyJson({ meta: { title: "Renamed lane" } }),
+      },
+      {
+        id: "lane-meta-delete",
+        label: "DELETE /lanes/{lane_id}/meta?keys=title",
+        method: "DELETE",
+        path: "/lanes/{lane_id}/meta?keys=title",
+        contentType: "application/json",
+        bodyTemplate: "",
+      },
+      {
+        id: "payloads-list",
+        label: "GET /lanes/{lane_id}/payloads?after_id=0&limit=100",
+        method: "GET",
+        path: "/lanes/{lane_id}/payloads?after_id=0&limit=100",
+        contentType: "application/json",
+        bodyTemplate: "",
+      },
+      {
+        id: "payload-create",
+        label: "POST /lanes/{lane_id}/payloads",
+        method: "POST",
+        path: "/lanes/{lane_id}/payloads",
+        contentType: "application/octet-stream",
+        bodyTemplate: "hello from test.html",
+      },
+      {
+        id: "lane-read",
+        label: "POST /lanes/{lane_id}/read",
+        method: "POST",
+        path: "/lanes/{lane_id}/read",
+        contentType: "application/json",
+        bodyTemplate: prettyJson({ last_read_payload_id: 0 }),
+      },
+      {
+        id: "payload-meta",
+        label: "POST /payloads/{payload_id}/meta",
+        method: "POST",
+        path: "/payloads/{payload_id}/meta",
+        contentType: "application/json",
+        bodyTemplate: prettyJson({ meta: { note: "manual-test" } }),
+      },
+      {
+        id: "payload-meta-get",
+        label: "GET /payloads/{payload_id}/meta",
+        method: "GET",
+        path: "/payloads/{payload_id}/meta",
+        contentType: "application/json",
+        bodyTemplate: "",
+      },
+      {
+        id: "payload-meta-put",
+        label: "PUT /payloads/{payload_id}/meta",
+        method: "PUT",
+        path: "/payloads/{payload_id}/meta",
+        contentType: "application/json",
+        bodyTemplate: prettyJson({ meta: { note: "manual-test" } }),
+      },
+      {
+        id: "payload-meta-patch",
+        label: "PATCH /payloads/{payload_id}/meta",
+        method: "PATCH",
+        path: "/payloads/{payload_id}/meta",
+        contentType: "application/json",
+        bodyTemplate: prettyJson({ meta: { note: "patched" } }),
+      },
+      {
+        id: "payload-meta-delete",
+        label: "DELETE /payloads/{payload_id}/meta?keys=note",
+        method: "DELETE",
+        path: "/payloads/{payload_id}/meta?keys=note",
+        contentType: "application/json",
+        bodyTemplate: "",
+      },
+      {
+        id: "payload-body",
+        label: "GET /payloads/{payload_id}/body",
+        method: "GET",
+        path: "/payloads/{payload_id}/body",
+        contentType: "application/json",
+        bodyTemplate: "",
+      },
+      {
+        id: "sync-routes",
+        label: "POST /sync/routes",
+        method: "POST",
+        path: "/sync/routes",
+        contentType: "application/json",
+        bodyTemplate: prettyJson({ skip: 0, limit: 50, items: [] }),
+      },
+      {
+        id: "sync-lanes",
+        label: "POST /sync/routes/{route_id}/lanes",
+        method: "POST",
+        path: "/sync/routes/{route_id}/lanes",
+        contentType: "application/json",
+        bodyTemplate: prettyJson({ skip: 0, limit: 50, items: [] }),
+      },
+      {
+        id: "sync-payloads",
+        label: "POST /sync/lanes/{lane_id}/payloads",
+        method: "POST",
+        path: "/sync/lanes/{lane_id}/payloads",
+        contentType: "application/json",
+        bodyTemplate: prettyJson({ skip: 0, limit: 50, items: [] }),
+      },
+    ];
+
     const state = {
-      autoPoll: true,
-      cursors: { system: 0, a: 0, b: 0 },
-      logs: { system: [], a: [], b: [] },
+      zone: "",
+      system: {
+        agentId: null,
+        password: "",
+        token: "",
+        afterId: 0,
+        autoPoll: true,
+        timerId: null,
+        itemCount: 0,
+        log: [],
+      },
+      agents: {
+        a: { agentId: null, password: "", token: "" },
+        b: { agentId: null, password: "", token: "" },
+      },
     };
 
     const $ = (id) => document.getElementById(id);
-    const status = $("status");
 
-    function pretty(value) {
+    function prettyJson(value) {
       return JSON.stringify(value, null, 2);
     }
 
-    function appendLog(key, value) {
-      state.logs[key].push(value);
-      if (state.logs[key].length > 200) {
-        state.logs[key].shift();
+    function setPageStatus(text, isWarn = false) {
+      const node = $("page-status");
+      node.textContent = text;
+      node.className = isWarn ? "status warn" : "status";
+    }
+
+    function setAgentStatus(agentKey, text, isWarn = false) {
+      const node = $(`agent-${agentKey}-status`);
+      node.textContent = text;
+      node.className = isWarn ? "status warn" : "status";
+    }
+
+    function formatToken(token) {
+      if (!token) return "-";
+      if (token.length <= 28) return token;
+      return `${token.slice(0, 12)}...${token.slice(-10)}`;
+    }
+
+    function safeJsonParse(text) {
+      if (!text.trim()) {
+        return null;
       }
-      const target = {
-        system: $("global-log"),
-        a: $("agent-a-log"),
-        b: $("agent-b-log"),
-      }[key];
-      target.textContent = state.logs[key].map((item) => typeof item === "string" ? item : pretty(item)).join("\n\n");
-      target.scrollTop = target.scrollHeight;
+      return JSON.parse(text);
     }
 
-    function setStatus(text) {
-      status.textContent = text;
+    function appendSystemLog(entry) {
+      state.system.log.push(entry);
+      if (state.system.log.length > 400) {
+        state.system.log.shift();
+      }
+      $("system-log").textContent = state.system.log.join("\n\n");
+      $("system-log").scrollTop = $("system-log").scrollHeight;
     }
 
-    async function fetchJson(path, options = {}) {
-      const response = await fetch(path, options);
-      const text = await response.text();
-      let data = null;
-      try { data = text ? JSON.parse(text) : null; } catch (_) { data = text; }
-      return { ok: response.ok, status: response.status, data, headers: response.headers };
+    function renderSystemState() {
+      $("zone-value").textContent = state.zone || "not initialized";
+      $("system-mode").textContent = state.system.autoPoll ? "auto" : "paused";
+      $("system-after-id").textContent = String(state.system.afterId);
+      $("system-items-count").textContent = String(state.system.itemCount);
+      $("system-agent-id").textContent = state.system.agentId ?? "-";
+      $("system-password").textContent = state.system.password || "-";
+      $("system-token").textContent = formatToken(state.system.token);
+      $("system-toggle").textContent = state.system.autoPoll ? "pause auto poll" : "resume auto poll";
     }
 
-    async function pollSystem() {
-      const token = $("token-system").value.trim();
-      if (!token) return;
-      const result = await fetchJson(`/updates?after_id=${state.cursors.system}&limit=50`, {
-        headers: { Authorization: `Bearer ${token}` },
+    function renderAgentState(agentKey) {
+      const agent = state.agents[agentKey];
+      $(`agent-${agentKey}-id`).textContent = agent.agentId ?? "-";
+      $(`agent-${agentKey}-password`).textContent = agent.password || "-";
+      $(`agent-${agentKey}-token`).textContent = formatToken(agent.token);
+    }
+
+    function initEndpointSelect(agentKey) {
+      const select = $(`agent-${agentKey}-endpoint`);
+      select.innerHTML = "";
+      for (const preset of endpointPresets) {
+        const option = document.createElement("option");
+        option.value = preset.id;
+        option.textContent = preset.label;
+        select.appendChild(option);
+      }
+      applyPreset(agentKey, endpointPresets[0].id);
+    }
+
+    function getPreset(presetId) {
+      const preset = endpointPresets.find((item) => item.id === presetId);
+      if (!preset) {
+        throw new Error(`Unknown preset: ${presetId}`);
+      }
+      return preset;
+    }
+
+    function applyPreset(agentKey, presetId) {
+      const preset = getPreset(presetId);
+      $(`agent-${agentKey}-method`).textContent = preset.method;
+      $(`agent-${agentKey}-path`).value = preset.path;
+      $(`agent-${agentKey}-content-type`).value = preset.contentType;
+      $(`agent-${agentKey}-body`).value = preset.bodyTemplate;
+    }
+
+    function formatResponse(response, parsedBody, rawBody) {
+      return prettyJson({
+        status: response.status,
+        ok: response.ok,
+        headers: {
+          "content-type": response.headers.get("content-type") || "",
+          "etag": response.headers.get("etag") || "",
+          "content-length": response.headers.get("content-length") || "",
+        },
+        body: parsedBody ?? rawBody,
       });
-      if (!result.ok) {
-        appendLog("system", { error: "system poll failed", result });
-        return;
-      }
-      for (const item of result.data.items ?? []) {
-        appendLog("system", item);
-      }
-      state.cursors.system = result.data.latest_update_id ?? state.cursors.system;
     }
 
-    async function pollAll() {
-      setStatus("polling");
-      $("title-system").textContent = `${$("name-system").value || "Zone System"} Stream`;
-      $("title-a").textContent = `${$("name-a").value || "Agent A"} Stream`;
-      $("title-b").textContent = `${$("name-b").value || "Agent B"} Stream`;
-      try {
-        await pollSystem();
-        setStatus("idle");
-      } catch (error) {
-        appendLog("system", { error: String(error) });
-        setStatus("poll error");
-      }
-    }
-
-    async function sendRequest() {
-      const method = $("req-method").value;
-      const path = $("req-path").value.trim() || "/";
-      const contentType = $("req-content-type").value;
-      const authSource = $("auth-source").value;
-      const body = $("req-body").value;
-
-      let token = "";
-      if (authSource === "system") token = $("token-system").value.trim();
-      if (authSource === "a") token = $("token-a").value.trim();
-      if (authSource === "b") token = $("token-b").value.trim();
-      if (authSource === "custom") token = $("custom-token").value.trim();
-
+    async function requestJson(path, method, token, bodyText = "", contentType = "application/json") {
       const headers = {};
-      if (token) headers["Authorization"] = `Bearer ${token}`;
-      if (method !== "GET") headers["Content-Type"] = contentType;
+      if (token) {
+        headers.Authorization = `Bearer ${token}`;
+      }
+      if (method !== "GET") {
+        headers["Content-Type"] = contentType;
+      }
 
       const options = { method, headers };
       if (method !== "GET") {
-        options.body = body;
+        options.body = bodyText;
       }
 
-      setStatus(`sending ${method}`);
-      const result = await fetchJson(path, options);
-      $("response-log").textContent = pretty({
-        request: { method, path, contentType, authSource: authSource || "no auth", body },
-        response: result,
+      const response = await fetch(path, options);
+      const rawBody = await response.text();
+      let parsedBody = null;
+      const responseType = response.headers.get("content-type") || "";
+      if (responseType.includes("application/json")) {
+        parsedBody = rawBody ? JSON.parse(rawBody) : null;
+      }
+      return { response, rawBody, parsedBody };
+    }
+
+    function makeRegisterBody(zone, deviceLabel, isSystem = false) {
+      return prettyJson({
+        zone,
+        is_system: isSystem,
+        device_label: deviceLabel,
       });
-      setStatus("idle");
     }
 
-    function applyPreset(name) {
-      const zeroZone = "00000000-0000-0000-0000-000000000000";
-      if (name === "register-a") {
-        $("req-method").value = "POST";
-        $("req-path").value = "/register";
-        $("auth-source").value = "";
-        $("req-content-type").value = "application/json";
-        $("req-body").value = pretty({ zone: zeroZone, device_label: "agent-a-browser" });
+    async function registerActor(zone, isSystem, deviceLabel) {
+      const { response, parsedBody, rawBody } = await requestJson(
+        "/register",
+        "POST",
+        "",
+        makeRegisterBody(zone, deviceLabel, isSystem),
+        "application/json"
+      );
+      if (!response.ok) {
+        throw new Error(`register failed ${response.status}: ${rawBody}`);
       }
-      if (name === "register-system") {
-        $("req-method").value = "POST";
-        $("req-path").value = "/register";
-        $("auth-source").value = "";
-        $("req-content-type").value = "application/json";
-        $("req-body").value = pretty({ zone: zeroZone, is_system: true, device_label: "system-browser" });
+      return parsedBody;
+    }
+
+    function rememberActor(kind, payload) {
+      const target = kind === "system" ? state.system : state.agents[kind];
+      target.agentId = payload.agent.agent_id;
+      target.password = payload.password;
+      target.token = payload.session_token;
+    }
+
+    function resetStateForInit() {
+      if (state.system.timerId !== null) {
+        clearTimeout(state.system.timerId);
+        state.system.timerId = null;
       }
-      if (name === "register-b") {
-        $("req-method").value = "POST";
-        $("req-path").value = "/register";
-        $("auth-source").value = "";
-        $("req-content-type").value = "application/json";
-        $("req-body").value = pretty({ zone: zeroZone, device_label: "agent-b-browser" });
-      }
-      if (name === "login-a") {
-        $("req-method").value = "POST";
-        $("req-path").value = "/login";
-        $("auth-source").value = "";
-        $("req-content-type").value = "application/json";
-        $("req-body").value = pretty({ agent_id: 1, password: "replace-me", device_label: "browser-login" });
-      }
-      if (name === "create-route") {
-        $("req-method").value = "POST";
-        $("req-path").value = "/routes";
-        $("auth-source").value = "a";
-        $("req-content-type").value = "application/json";
-        $("req-body").value = pretty({});
-      }
-      if (name === "post-payload") {
-        $("req-method").value = "POST";
-        $("req-path").value = "/lanes/1/payloads";
-        $("auth-source").value = "a";
-        $("req-content-type").value = "application/octet-stream";
-        $("req-body").value = "hello from browser";
-      }
-      if (name === "mark-read") {
-        $("req-method").value = "POST";
-        $("req-path").value = "/lanes/1/read";
-        $("auth-source").value = "a";
-        $("req-content-type").value = "application/json";
-        $("req-body").value = pretty({ last_read_payload_id: 1 });
-      }
-      if (name === "post-meta") {
-        $("req-method").value = "POST";
-        $("req-path").value = "/payloads/1/meta";
-        $("auth-source").value = "a";
-        $("req-content-type").value = "application/json";
-        $("req-body").value = pretty({ meta: { reaction: "like" } });
+      state.zone = "";
+      state.system.agentId = null;
+      state.system.password = "";
+      state.system.token = "";
+      state.system.afterId = 0;
+      state.system.autoPoll = true;
+      state.system.itemCount = 0;
+      state.system.log = [];
+      state.agents.a = { agentId: null, password: "", token: "" };
+      state.agents.b = { agentId: null, password: "", token: "" };
+      $("system-log").textContent = "";
+      $("agent-a-response").textContent = "";
+      $("agent-b-response").textContent = "";
+      setAgentStatus("a", "idle");
+      setAgentStatus("b", "idle");
+    }
+
+    async function initZone() {
+      setPageStatus("init in progress");
+      resetStateForInit();
+      renderSystemState();
+      renderAgentState("a");
+      renderAgentState("b");
+
+      const zone = crypto.randomUUID();
+      try {
+        const system = await registerActor(zone, true, "system-browser");
+        const agentA = await registerActor(zone, false, "agent-a-browser");
+        const agentB = await registerActor(zone, false, "agent-b-browser");
+
+        state.zone = zone;
+        rememberActor("system", system);
+        rememberActor("a", agentA);
+        rememberActor("b", agentB);
+
+        appendSystemLog(`[init] zone ${zone}`);
+        appendSystemLog(`[init] system agent_id=${state.system.agentId}`);
+        appendSystemLog(`[init] agent A agent_id=${state.agents.a.agentId}`);
+        appendSystemLog(`[init] agent B agent_id=${state.agents.b.agentId}`);
+
+        renderSystemState();
+        renderAgentState("a");
+        renderAgentState("b");
+        setPageStatus("initialized");
+        scheduleSystemPoll();
+      } catch (error) {
+        setPageStatus(`init failed: ${String(error)}`, true);
+        appendSystemLog(`[init-error] ${String(error)}`);
+        throw error;
       }
     }
 
-    $("send-request").addEventListener("click", sendRequest);
-    $("poll-once").addEventListener("click", pollAll);
-    $("toggle-poll").addEventListener("click", () => {
-      state.autoPoll = !state.autoPoll;
-      $("toggle-poll").textContent = state.autoPoll ? "pause auto poll" : "resume auto poll";
-      setStatus(state.autoPoll ? "auto poll on" : "auto poll off");
-    });
-
-    document.querySelectorAll("[data-preset]").forEach((button) => {
-      button.addEventListener("click", () => applyPreset(button.dataset.preset));
-    });
-
-    setInterval(() => {
-      if (state.autoPoll) {
-        pollAll();
+    async function pollSystemOnce() {
+      if (!state.system.token) {
+        appendSystemLog("[poll] skipped: system token is empty");
+        return;
       }
-    }, 2000);
 
-    appendLog("system", "register system agent and set its token");
-    appendLog("a", "set Agent A token and poll");
-    appendLog("b", "set Agent B token and poll");
+      const path = `/updates?after_id=${encodeURIComponent(String(state.system.afterId))}&limit=100`;
+      const { response, parsedBody, rawBody } = await requestJson(path, "GET", state.system.token);
+      if (!response.ok) {
+        appendSystemLog(`[poll-error] ${formatResponse(response, parsedBody, rawBody)}`);
+        return;
+      }
+
+      const items = parsedBody?.items ?? [];
+      if (items.length > 0) {
+        for (const item of items) {
+          appendSystemLog(prettyJson(item));
+        }
+        const last = items[items.length - 1];
+        state.system.afterId = last.update_id;
+        state.system.itemCount += items.length;
+      }
+      renderSystemState();
+    }
+
+    function scheduleSystemPoll() {
+      if (state.system.timerId !== null) {
+        clearTimeout(state.system.timerId);
+        state.system.timerId = null;
+      }
+      if (!state.system.autoPoll || !state.system.token) {
+        renderSystemState();
+        return;
+      }
+      state.system.timerId = setTimeout(async () => {
+        state.system.timerId = null;
+        try {
+          await pollSystemOnce();
+        } catch (error) {
+          appendSystemLog(`[poll-exception] ${String(error)}`);
+          setPageStatus(`poll failed: ${String(error)}`, true);
+        } finally {
+          if (state.system.autoPoll) {
+            scheduleSystemPoll();
+          }
+        }
+      }, POLL_INTERVAL_MS);
+      renderSystemState();
+    }
+
+    function toggleSystemPoll() {
+      state.system.autoPoll = !state.system.autoPoll;
+      if (!state.system.autoPoll && state.system.timerId !== null) {
+        clearTimeout(state.system.timerId);
+        state.system.timerId = null;
+      }
+      if (state.system.autoPoll) {
+        setPageStatus("auto poll resumed");
+        scheduleSystemPoll();
+      } else {
+        setPageStatus("auto poll paused");
+        renderSystemState();
+      }
+    }
+
+    async function sendAgentRequest(agentKey) {
+      const agent = state.agents[agentKey];
+      if (!agent.token) {
+        setAgentStatus(agentKey, "init required", true);
+        return;
+      }
+
+      const presetId = $(`agent-${agentKey}-endpoint`).value;
+      const preset = getPreset(presetId);
+      const path = $(`agent-${agentKey}-path`).value.trim();
+      const body = $(`agent-${agentKey}-body`).value;
+      const contentType = $(`agent-${agentKey}-content-type`).value;
+
+      if (!path) {
+        setAgentStatus(agentKey, "path required", true);
+        return;
+      }
+
+      setAgentStatus(agentKey, `${preset.method} ${path}`);
+      try {
+        if (preset.method !== "GET" && contentType === "application/json") {
+          safeJsonParse(body);
+        }
+        const { response, parsedBody, rawBody } = await requestJson(
+          path,
+          preset.method,
+          agent.token,
+          body,
+          contentType
+        );
+        $(`agent-${agentKey}-response`).textContent = formatResponse(response, parsedBody, rawBody);
+        setAgentStatus(agentKey, `done ${response.status}`, !response.ok);
+      } catch (error) {
+        $(`agent-${agentKey}-response`).textContent = String(error);
+        setAgentStatus(agentKey, "request failed", true);
+      }
+    }
+
+    function clearLogs() {
+      state.system.log = [];
+      state.system.itemCount = 0;
+      $("system-log").textContent = "";
+      renderSystemState();
+    }
+
+    function bootstrapUi() {
+      initEndpointSelect("a");
+      initEndpointSelect("b");
+
+      $("agent-a-endpoint").addEventListener("change", (event) => {
+        applyPreset("a", event.target.value);
+      });
+      $("agent-b-endpoint").addEventListener("change", (event) => {
+        applyPreset("b", event.target.value);
+      });
+
+      $("init-button").addEventListener("click", () => {
+        initZone().catch(() => {});
+      });
+      $("clear-logs").addEventListener("click", clearLogs);
+      $("system-poll-once").addEventListener("click", async () => {
+        setPageStatus("manual poll");
+        try {
+          await pollSystemOnce();
+          setPageStatus("manual poll done");
+        } catch (error) {
+          setPageStatus(`manual poll failed: ${String(error)}`, true);
+        }
+      });
+      $("system-toggle").addEventListener("click", toggleSystemPoll);
+      $("agent-a-send").addEventListener("click", () => sendAgentRequest("a"));
+      $("agent-b-send").addEventListener("click", () => sendAgentRequest("b"));
+
+      renderSystemState();
+      renderAgentState("a");
+      renderAgentState("b");
+    }
+
+    bootstrapUi();
   </script>
 </body>
 </html>
