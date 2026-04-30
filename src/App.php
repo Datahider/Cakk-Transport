@@ -19,8 +19,9 @@ use CakkTransport\data\UpdateLog;
 use DateTimeImmutable;
 use Exception;
 use Throwable;
-use losthost\DB\DB;
 use losthost\DB\DBList;
+use losthost\DB\DBValue;
+use losthost\DB\DBView;
 
 final class App
 {
@@ -403,16 +404,15 @@ final class App
         $afterId = max(0, (int) ($_GET['after_id'] ?? 0));
         $limit = max(1, min(500, (int) ($_GET['limit'] ?? 100)));
 
-        $sql = sprintf(
-            'SELECT id FROM [UpdateLog] WHERE zone = ? AND id > ? ORDER BY id ASC LIMIT %d',
-            $limit + 1
+        $list = new DBList(
+            UpdateLog::class,
+            sprintf('zone = ? AND id > ? ORDER BY id ASC LIMIT %d', $limit + 1),
+            [(string) $actor->zone, $afterId]
         );
-        $sth = DB::prepare($sql);
-        $sth->execute([(string) $actor->zone, $afterId]);
 
         $items = [];
-        while (($updateId = $sth->fetchColumn()) !== false) {
-            $items[] = new UpdateLog(['id' => (int) $updateId]);
+        while ($update = $list->next()) {
+            $items[] = $update;
         }
 
         $hasMore = count($items) > $limit;
@@ -696,16 +696,18 @@ final class App
     private function listRoutes(Agent $actor): array
     {
         $metaSelector = $this->readMetaSelector();
-        $sql = 'SELECT f.* FROM [Route] f
-            INNER JOIN [Subscription] fm ON fm.route_id = f.id
-            WHERE fm.agent_id = ? AND f.is_deleted = 0
-            ORDER BY f.revision DESC, f.id DESC';
-        $sth = DB::prepare($sql);
-        $sth->execute([(int) $actor->id]);
+        $list = new DBList(
+            Route::class,
+            'id IN (
+                SELECT f.id FROM [Route] f
+                INNER JOIN [Subscription] fm ON fm.route_id = f.id
+                WHERE fm.agent_id = ? AND f.is_deleted = 0
+            ) ORDER BY revision DESC, id DESC',
+            [(int) $actor->id]
+        );
 
         $items = [];
-        while ($row = $sth->fetch(\PDO::FETCH_ASSOC)) {
-            $route = new Route(['id' => (int) $row['id']]);
+        while ($route = $list->next()) {
             $items[] = $this->serializeRoute($route, $metaSelector);
         }
 
@@ -1055,16 +1057,15 @@ final class App
         $afterId = max(0, (int) ($_GET['after_id'] ?? 0));
         $limit = max(1, min(100, (int) ($_GET['limit'] ?? 50)));
 
-        $sql = sprintf(
-            'SELECT id FROM [Payload] WHERE lane_id = ? AND is_deleted = 0 AND id > ? ORDER BY id ASC LIMIT %d',
-            $limit
+        $list = new DBList(
+            Payload::class,
+            sprintf('lane_id = ? AND is_deleted = 0 AND id > ? ORDER BY id ASC LIMIT %d', $limit),
+            [(int) $lane->id, $afterId]
         );
-        $sth = DB::prepare($sql);
-        $sth->execute([(int) $lane->id, $afterId]);
 
         $items = [];
-        while (($payloadId = $sth->fetchColumn()) !== false) {
-            $items[] = $this->serializePayload(new Payload(['id' => (int) $payloadId]));
+        while ($payload = $list->next()) {
+            $items[] = $this->serializePayload($payload);
         }
 
         return [
@@ -1767,11 +1768,10 @@ final class App
     private function laneIdsForRoute(Route $route): array
     {
         $laneIds = [];
-        $sth = DB::prepare('SELECT id FROM [Lane] WHERE route_id = ? ORDER BY id ASC');
-        $sth->execute([(int) $route->id]);
+        $view = new DBView('SELECT id FROM [Lane] WHERE route_id = ? ORDER BY id ASC', [(int) $route->id]);
 
-        while (($laneId = $sth->fetchColumn()) !== false) {
-            $laneIds[] = (int) $laneId;
+        while ($view->next()) {
+            $laneIds[] = (int) $view->id;
         }
 
         return $laneIds;
@@ -1780,11 +1780,10 @@ final class App
     private function softDeletePayloadsForLaneId(TransportTransaction $transaction, int $laneId): void
     {
         $payloadIds = [];
-        $sth = DB::prepare('SELECT id FROM [Payload] WHERE lane_id = ? AND is_deleted = 0 ORDER BY id ASC');
-        $sth->execute([$laneId]);
+        $view = new DBView('SELECT id FROM [Payload] WHERE lane_id = ? AND is_deleted = 0 ORDER BY id ASC', [$laneId]);
 
-        while (($payloadId = $sth->fetchColumn()) !== false) {
-            $payloadIds[] = (int) $payloadId;
+        while ($view->next()) {
+            $payloadIds[] = (int) $view->id;
         }
 
         foreach ($payloadIds as $payloadId) {
@@ -2000,11 +1999,12 @@ final class App
 
     private function lastActivePayloadIdForLane(int $laneId): ?int
     {
-        $sth = DB::prepare('SELECT id FROM [Payload] WHERE lane_id = ? AND is_deleted = 0 ORDER BY id DESC LIMIT 1');
-        $sth->execute([$laneId]);
-        $lastPayloadId = $sth->fetchColumn();
+        $lastPayloadId = new DBValue(
+            'SELECT MAX(id) AS payload_id FROM [Payload] WHERE lane_id = ? AND is_deleted = 0',
+            [$laneId]
+        );
 
-        return $lastPayloadId !== false ? (int) $lastPayloadId : null;
+        return $lastPayloadId->payload_id !== null ? (int) $lastPayloadId->payload_id : null;
     }
 
     private function assertCanManageMembers(Agent $actor, Route $route): void
@@ -2517,10 +2517,9 @@ final class App
 
     private function zoneHasAgents(string $zone): bool
     {
-        $sth = DB::prepare('SELECT id FROM [Agent] WHERE zone = ? LIMIT 1');
-        $sth->execute([$zone]);
+        $id = new DBValue('SELECT COUNT(*) AS agent_count FROM [Agent] WHERE zone = ?', [$zone]);
 
-        return $sth->fetchColumn() !== false;
+        return (int) $id->agent_count > 0;
     }
 
     private function requiredUuidField(array $payload, string $field): string
@@ -2630,15 +2629,14 @@ final class App
             ORDER BY r.revision DESC, r.id DESC
             LIMIT %d OFFSET %d', $limit, $skip);
 
-        $sth = DB::prepare($sql);
-        $sth->execute([(int) $actor->id]);
+        $view = new DBView($sql, [(int) $actor->id]);
 
         $items = [];
-        while ($row = $sth->fetch(\PDO::FETCH_ASSOC)) {
+        while ($view->next()) {
             $items[] = [
-                'id' => (int) $row['id'],
-                'revision' => $this->formatDateTime($row['revision']),
-                'is_deleted' => (bool) $row['is_deleted'],
+                'id' => (int) $view->id,
+                'revision' => $this->formatDateTime($view->revision),
+                'is_deleted' => (bool) $view->is_deleted,
             ];
         }
 
@@ -2656,15 +2654,14 @@ final class App
             $skip
         );
 
-        $sth = DB::prepare($sql);
-        $sth->execute([(int) $route->id]);
+        $view = new DBView($sql, [(int) $route->id]);
 
         $items = [];
-        while ($row = $sth->fetch(\PDO::FETCH_ASSOC)) {
+        while ($view->next()) {
             $items[] = [
-                'id' => (int) $row['id'],
-                'revision' => $this->formatDateTime($row['revision']),
-                'is_deleted' => (bool) $row['is_deleted'],
+                'id' => (int) $view->id,
+                'revision' => $this->formatDateTime($view->revision),
+                'is_deleted' => (bool) $view->is_deleted,
             ];
         }
 
@@ -2676,19 +2673,18 @@ final class App
      */
     private function loadPayloadSyncItems(Lane $lane, int $skip, int $limit): array
     {
-        $sth = DB::prepare(sprintf(
+        $view = new DBView(sprintf(
             'SELECT id, revision, is_deleted FROM [Payload] WHERE lane_id = ? ORDER BY revision DESC, id DESC LIMIT %d OFFSET %d',
             $limit,
             $skip
-        ));
-        $sth->execute([(int) $lane->id]);
+        ), [(int) $lane->id]);
 
         $items = [];
-        while ($row = $sth->fetch(\PDO::FETCH_ASSOC)) {
+        while ($view->next()) {
             $items[] = [
-                'id' => (int) $row['id'],
-                'revision' => $this->formatDateTime($row['revision']),
-                'is_deleted' => (bool) $row['is_deleted'],
+                'id' => (int) $view->id,
+                'revision' => $this->formatDateTime($view->revision),
+                'is_deleted' => (bool) $view->is_deleted,
             ];
         }
 
