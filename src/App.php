@@ -373,7 +373,7 @@ final class App
     {
         $items = array_map(
             fn (AgentSession $session): array => $this->serializeSession($session, (int) $currentSession->id),
-            (new DBList(AgentSession::class, ['agent_id' => (int) $actor->id]))->asArray()
+            $this->dbList(AgentSession::class, ['agent_id' => (int) $actor->id])->asArray()
         );
 
         return [
@@ -404,7 +404,7 @@ final class App
         $afterId = max(0, (int) ($_GET['after_id'] ?? 0));
         $limit = max(1, min(500, (int) ($_GET['limit'] ?? 100)));
 
-        $list = new DBList(
+        $list = $this->dbList(
             UpdateLog::class,
             sprintf('zone = ? AND id > ? ORDER BY id ASC LIMIT %d', $limit + 1),
             [(string) $actor->zone, $afterId]
@@ -696,7 +696,7 @@ final class App
     private function listRoutes(Agent $actor): array
     {
         $metaSelector = $this->readMetaSelector();
-        $list = new DBList(
+        $list = $this->dbList(
             Route::class,
             'id IN (
                 SELECT f.id FROM [Route] f
@@ -717,7 +717,7 @@ final class App
     private function listRouteSubscriptions(Agent $actor, string $routePublicId): array
     {
         $route = $this->loadRouteForMember($actor, $routePublicId);
-        $members = (new DBList(Subscription::class, ['route_id' => (int) $route->id]))->asArray();
+        $members = $this->dbList(Subscription::class, ['route_id' => (int) $route->id])->asArray();
 
         $items = [];
         foreach ($members as $member) {
@@ -750,7 +750,7 @@ final class App
             $this->error(404, 'Agent not found');
         }
 
-        $existing = new DBList(
+        $existing = $this->dbList(
             Subscription::class,
             ['route_id' => (int) $route->id, 'agent_id' => (int) $target->id]
         );
@@ -811,7 +811,7 @@ final class App
     private function listLanes(Agent $actor, string $routePublicId): array
     {
         $route = $this->loadRouteForMember($actor, $routePublicId);
-        $lanes = (new DBList(Lane::class, ['route_id' => (int) $route->id, 'is_deleted' => false]))->asArray();
+        $lanes = $this->dbList(Lane::class, ['route_id' => (int) $route->id, 'is_deleted' => false])->asArray();
         $metaSelector = $this->readMetaSelector();
 
         return [
@@ -1057,7 +1057,7 @@ final class App
         $afterId = max(0, (int) ($_GET['after_id'] ?? 0));
         $limit = max(1, min(100, (int) ($_GET['limit'] ?? 50)));
 
-        $list = new DBList(
+        $list = $this->dbList(
             Payload::class,
             sprintf('lane_id = ? AND is_deleted = 0 AND id > ? ORDER BY id ASC LIMIT %d', $limit),
             [(int) $lane->id, $afterId]
@@ -1214,7 +1214,7 @@ final class App
     private function listPayloadMeta(Agent $actor, string $payloadId): array
     {
         $payload = $this->loadReadablePayload($actor, $payloadId);
-        $items = (new DBList(PayloadMeta::class, ['payload_id' => (int) $payload->id]))->asArray();
+        $items = $this->dbList(PayloadMeta::class, ['payload_id' => (int) $payload->id])->asArray();
 
         return [
             'ok' => true,
@@ -1512,7 +1512,7 @@ final class App
             $this->error(404, 'Route not found');
         }
 
-        $membership = new DBList(
+        $membership = $this->dbList(
             Subscription::class,
             ['route_id' => (int) $route->id, 'agent_id' => (int) $actor->id]
         );
@@ -1620,7 +1620,7 @@ final class App
 
     private function loadLaneReadState(Lane $lane, Agent $actor): ?LaneReadState
     {
-        $list = new DBList(LaneReadState::class, [
+        $list = $this->dbList(LaneReadState::class, [
             'lane_id' => (int) $lane->id,
             'agent_id' => (int) $actor->id,
         ]);
@@ -1632,7 +1632,7 @@ final class App
     private function loadAgentMetaData(Agent $actor): array
     {
         $meta = [];
-        foreach ((new DBList(AgentMeta::class, ['agent_id' => (int) $actor->id]))->asArray() as $record) {
+        foreach ($this->dbList(AgentMeta::class, ['agent_id' => (int) $actor->id])->asArray() as $record) {
             $meta[(string) $record->meta_key] = (string) $record->meta_value;
         }
 
@@ -1642,7 +1642,7 @@ final class App
     private function loadRouteMetaData(Route $route): array
     {
         $meta = [];
-        foreach ((new DBList(RouteMeta::class, ['route_id' => (int) $route->id]))->asArray() as $record) {
+        foreach ($this->dbList(RouteMeta::class, ['route_id' => (int) $route->id])->asArray() as $record) {
             $meta[(string) $record->meta_key] = (string) $record->meta_value;
         }
 
@@ -1652,7 +1652,7 @@ final class App
     private function loadLaneMetaData(Lane $lane): array
     {
         $meta = [];
-        foreach ((new DBList(LaneMeta::class, ['lane_id' => (int) $lane->id]))->asArray() as $record) {
+        foreach ($this->dbList(LaneMeta::class, ['lane_id' => (int) $lane->id])->asArray() as $record) {
             $meta[(string) $record->meta_key] = (string) $record->meta_value;
         }
 
@@ -1768,7 +1768,7 @@ final class App
     private function laneIdsForRoute(Route $route): array
     {
         $laneIds = [];
-        $view = new DBView('SELECT id FROM [Lane] WHERE route_id = ? ORDER BY id ASC', [(int) $route->id]);
+        $view = $this->dbView([Lane::class], 'SELECT id FROM [Lane] WHERE route_id = ? ORDER BY id ASC', [(int) $route->id]);
 
         while ($view->next()) {
             $laneIds[] = (int) $view->id;
@@ -1780,7 +1780,7 @@ final class App
     private function softDeletePayloadsForLaneId(TransportTransaction $transaction, int $laneId): void
     {
         $payloadIds = [];
-        $view = new DBView('SELECT id FROM [Payload] WHERE lane_id = ? AND is_deleted = 0 ORDER BY id ASC', [$laneId]);
+        $view = $this->dbView([Payload::class], 'SELECT id FROM [Payload] WHERE lane_id = ? AND is_deleted = 0 ORDER BY id ASC', [$laneId]);
 
         while ($view->next()) {
             $payloadIds[] = (int) $view->id;
@@ -1795,28 +1795,28 @@ final class App
 
     private function deleteLaneReadStatesForLaneId(TransportTransaction $transaction, int $laneId): void
     {
-        foreach ((new DBList(LaneReadState::class, ['lane_id' => $laneId]))->asArray() as $readState) {
+        foreach ($this->dbList(LaneReadState::class, ['lane_id' => $laneId])->asArray() as $readState) {
             $transaction->delete(TransportTransaction::OBJECT_LANE_READ_STATE, $readState);
         }
     }
 
     private function deleteRouteMetaForRouteId(TransportTransaction $transaction, int $routeId): void
     {
-        foreach ((new DBList(RouteMeta::class, ['route_id' => $routeId]))->asArray() as $routeMeta) {
+        foreach ($this->dbList(RouteMeta::class, ['route_id' => $routeId])->asArray() as $routeMeta) {
             $transaction->delete(TransportTransaction::OBJECT_ROUTE_META, $routeMeta);
         }
     }
 
     private function deleteLaneMetaForLaneId(TransportTransaction $transaction, int $laneId): void
     {
-        foreach ((new DBList(LaneMeta::class, ['lane_id' => $laneId]))->asArray() as $laneMeta) {
+        foreach ($this->dbList(LaneMeta::class, ['lane_id' => $laneId])->asArray() as $laneMeta) {
             $transaction->delete(TransportTransaction::OBJECT_LANE_META, $laneMeta);
         }
     }
 
     private function deletePayloadMetaForPayloadId(TransportTransaction $transaction, int $payloadId): void
     {
-        foreach ((new DBList(PayloadMeta::class, ['payload_id' => $payloadId]))->asArray() as $payloadMeta) {
+        foreach ($this->dbList(PayloadMeta::class, ['payload_id' => $payloadId])->asArray() as $payloadMeta) {
             $transaction->delete(TransportTransaction::OBJECT_PAYLOAD_META, $payloadMeta);
         }
     }
@@ -1991,7 +1991,7 @@ final class App
 
     private function findDefaultLane(Route $route): ?Lane
     {
-        $list = new DBList(Lane::class, ['route_id' => (int) $route->id, 'is_default' => true, 'is_deleted' => false]);
+        $list = $this->dbList(Lane::class, ['route_id' => (int) $route->id, 'is_default' => true, 'is_deleted' => false]);
         $lane = $list->next();
 
         return $lane instanceof Lane ? $lane : null;
@@ -1999,7 +1999,8 @@ final class App
 
     private function lastActivePayloadIdForLane(int $laneId): ?int
     {
-        $lastPayloadId = new DBValue(
+        $lastPayloadId = $this->dbValue(
+            [Payload::class],
             'SELECT MAX(id) AS payload_id FROM [Payload] WHERE lane_id = ? AND is_deleted = 0',
             [$laneId]
         );
@@ -2051,7 +2052,7 @@ final class App
 
     private function routeRoleForAgent(Agent $actor, Route $route): string
     {
-        $membership = new DBList(
+        $membership = $this->dbList(
             Subscription::class,
             ['route_id' => (int) $route->id, 'agent_id' => (int) $actor->id]
         );
@@ -2092,7 +2093,7 @@ final class App
         $actorWeight = $this->roleWeight($this->routeRoleForAgent($actor, $route));
         $maxWeight = 0;
 
-        foreach ((new DBList(Subscription::class, ['route_id' => (int) $route->id]))->asArray() as $subscription) {
+        foreach ($this->dbList(Subscription::class, ['route_id' => (int) $route->id])->asArray() as $subscription) {
             $maxWeight = max($maxWeight, $this->roleWeight((string) $subscription->role));
         }
 
@@ -2297,7 +2298,7 @@ final class App
         bool $replaceAll,
         array $baseValues,
     ): void {
-        $records = (new DBList($className, $identity))->asArray();
+        $records = $this->dbList($className, $identity)->asArray();
         $existing = [];
         foreach ($records as $record) {
             $existing[(string) $record->{$keyField}] = $record;
@@ -2517,7 +2518,7 @@ final class App
 
     private function zoneHasAgents(string $zone): bool
     {
-        $id = new DBValue('SELECT COUNT(*) AS agent_count FROM [Agent] WHERE zone = ?', [$zone]);
+        $id = $this->dbValue([Agent::class], 'SELECT COUNT(*) AS agent_count FROM [Agent] WHERE zone = ?', [$zone]);
 
         return (int) $id->agent_count > 0;
     }
@@ -2629,7 +2630,7 @@ final class App
             ORDER BY r.revision DESC, r.id DESC
             LIMIT %d OFFSET %d', $limit, $skip);
 
-        $view = new DBView($sql, [(int) $actor->id]);
+        $view = $this->dbView([Route::class, Subscription::class], $sql, [(int) $actor->id]);
 
         $items = [];
         while ($view->next()) {
@@ -2654,7 +2655,7 @@ final class App
             $skip
         );
 
-        $view = new DBView($sql, [(int) $route->id]);
+        $view = $this->dbView([Lane::class], $sql, [(int) $route->id]);
 
         $items = [];
         while ($view->next()) {
@@ -2673,7 +2674,7 @@ final class App
      */
     private function loadPayloadSyncItems(Lane $lane, int $skip, int $limit): array
     {
-        $view = new DBView(sprintf(
+        $view = $this->dbView([Payload::class], sprintf(
             'SELECT id, revision, is_deleted FROM [Payload] WHERE lane_id = ? ORDER BY revision DESC, id DESC LIMIT %d OFFSET %d',
             $limit,
             $skip
@@ -2690,6 +2691,51 @@ final class App
 
         return $items;
     }
+
+    /**
+     * @param class-string $class
+     * @param array<string,mixed>|string $filter
+     * @param array<string,mixed>|list<mixed>|string|null $params
+     */
+    private function dbList(string $class, array|string $filter, array|string|null $params = null): DBList
+    {
+        $this->ensureDataStructures($class);
+
+        return new DBList($class, $filter, $params);
+    }
+
+    /**
+     * @param list<class-string> $classes
+     * @param list<mixed>|mixed $params
+     */
+    private function dbView(array $classes, string $sql, mixed $params = []): DBView
+    {
+        $this->ensureDataStructures(...$classes);
+
+        return new DBView($sql, $params);
+    }
+
+    /**
+     * @param list<class-string> $classes
+     * @param list<mixed>|mixed $params
+     */
+    private function dbValue(array $classes, string $sql, mixed $params = []): DBValue
+    {
+        $this->ensureDataStructures(...$classes);
+
+        return new DBValue($sql, $params);
+    }
+
+    /**
+     * @param class-string ...$classes
+     */
+    private function ensureDataStructures(string ...$classes): void
+    {
+        foreach (array_values(array_unique($classes)) as $class) {
+            $class::initDataStructure();
+        }
+    }
+
     private function formatDateTime(mixed $value): string
     {
         if ($value instanceof \DateTimeInterface) {
