@@ -1768,7 +1768,7 @@ final class App
     private function laneIdsForRoute(Route $route): array
     {
         $laneIds = [];
-        $view = $this->dbView([Lane::class], 'SELECT id FROM [Lane] WHERE route_id = ? ORDER BY id ASC', [(int) $route->id]);
+        $view = $this->dbView('SELECT id FROM [Lane] WHERE route_id = ? ORDER BY id ASC', [(int) $route->id]);
 
         while ($view->next()) {
             $laneIds[] = (int) $view->id;
@@ -1780,7 +1780,7 @@ final class App
     private function softDeletePayloadsForLaneId(TransportTransaction $transaction, int $laneId): void
     {
         $payloadIds = [];
-        $view = $this->dbView([Payload::class], 'SELECT id FROM [Payload] WHERE lane_id = ? AND is_deleted = 0 ORDER BY id ASC', [$laneId]);
+        $view = $this->dbView('SELECT id FROM [Payload] WHERE lane_id = ? AND is_deleted = 0 ORDER BY id ASC', [$laneId]);
 
         while ($view->next()) {
             $payloadIds[] = (int) $view->id;
@@ -2000,7 +2000,6 @@ final class App
     private function lastActivePayloadIdForLane(int $laneId): ?int
     {
         $lastPayloadId = $this->dbValue(
-            [Payload::class],
             'SELECT MAX(id) AS payload_id FROM [Payload] WHERE lane_id = ? AND is_deleted = 0',
             [$laneId]
         );
@@ -2518,7 +2517,7 @@ final class App
 
     private function zoneHasAgents(string $zone): bool
     {
-        $id = $this->dbValue([Agent::class], 'SELECT COUNT(*) AS agent_count FROM [Agent] WHERE zone = ?', [$zone]);
+        $id = $this->dbValue('SELECT COUNT(*) AS agent_count FROM [Agent] WHERE zone = ?', [$zone]);
 
         return (int) $id->agent_count > 0;
     }
@@ -2630,7 +2629,7 @@ final class App
             ORDER BY r.revision DESC, r.id DESC
             LIMIT %d OFFSET %d', $limit, $skip);
 
-        $view = $this->dbView([Route::class, Subscription::class], $sql, [(int) $actor->id]);
+        $view = $this->dbView($sql, [(int) $actor->id]);
 
         $items = [];
         while ($view->next()) {
@@ -2655,7 +2654,7 @@ final class App
             $skip
         );
 
-        $view = $this->dbView([Lane::class], $sql, [(int) $route->id]);
+        $view = $this->dbView($sql, [(int) $route->id]);
 
         $items = [];
         while ($view->next()) {
@@ -2674,7 +2673,7 @@ final class App
      */
     private function loadPayloadSyncItems(Lane $lane, int $skip, int $limit): array
     {
-        $view = $this->dbView([Payload::class], sprintf(
+        $view = $this->dbView(sprintf(
             'SELECT id, revision, is_deleted FROM [Payload] WHERE lane_id = ? ORDER BY revision DESC, id DESC LIMIT %d OFFSET %d',
             $limit,
             $skip
@@ -2705,23 +2704,21 @@ final class App
     }
 
     /**
-     * @param list<class-string> $classes
      * @param list<mixed>|mixed $params
      */
-    private function dbView(array $classes, string $sql, mixed $params = []): DBView
+    private function dbView(string $sql, mixed $params = []): DBView
     {
-        $this->ensureDataStructures(...$classes);
+        $this->ensureDataStructuresForSql($sql);
 
         return new DBView($sql, $params);
     }
 
     /**
-     * @param list<class-string> $classes
      * @param list<mixed>|mixed $params
      */
-    private function dbValue(array $classes, string $sql, mixed $params = []): DBValue
+    private function dbValue(string $sql, mixed $params = []): DBValue
     {
-        $this->ensureDataStructures(...$classes);
+        $this->ensureDataStructuresForSql($sql);
 
         return new DBValue($sql, $params);
     }
@@ -2734,6 +2731,20 @@ final class App
         foreach (array_values(array_unique($classes)) as $class) {
             $class::initDataStructure();
         }
+    }
+
+    private function ensureDataStructuresForSql(string $sql): void
+    {
+        if (preg_match_all('/\[(\w+)\]/', $sql, $matches) < 1) {
+            return;
+        }
+
+        $classes = array_map(
+            static fn (string $table): string => 'CakkTransport\\data\\' . $table,
+            array_values(array_unique($matches[1]))
+        );
+
+        $this->ensureDataStructures(...$classes);
     }
 
     private function formatDateTime(mixed $value): string
