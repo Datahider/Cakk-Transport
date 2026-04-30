@@ -170,6 +170,8 @@ Response:
 - `GET /me`
 - `GET /me?meta=all`
 - `GET /me?meta=title,avatar`
+- `GET /agents/{agent_id}`
+- `GET /agents/{agent_id}?meta=title,avatar`
 - `GET /me/meta`
 - `POST /me/meta`
 - `PUT /me/meta`
@@ -195,6 +197,12 @@ Rules:
 - `PATCH` updates selected keys
 - `DELETE /.../meta?keys=title,avatar` deletes selected keys
 - `DELETE /.../meta` without `keys` deletes the whole meta resource
+- `GET /.../meta` returns `200` with `{ "ok": true, "meta": {} }` when meta is absent
+
+Agent visibility:
+- `GET /agents/{agent_id}` is allowed only inside the same `zone`
+- the caller must either request itself or share at least one non-deleted route with the target agent
+- otherwise the server returns `404 Agent not found`
 
 ## Route endpoints
 

@@ -227,8 +227,8 @@ final class AcceptanceRunner
         $this->assertSame($this->agentId('a'), $me['json']['agent']['agent_id'] ?? null, 'me returns current agent');
 
         $missing = $this->json('GET', '/me/meta', null, $this->token('a'));
-        $this->assertStatus($missing, 404);
-        $this->assertSame('Agent meta not found', $missing['json']['error'] ?? null, 'missing agent meta');
+        $this->assertStatus($missing, 200);
+        $this->assertSame([], $missing['json']['meta'] ?? null, 'missing agent meta returns empty object');
 
         $badValue = $this->json('POST', '/me/meta', [
             'meta' => ['title' => true],
@@ -279,7 +279,8 @@ final class AcceptanceRunner
         $this->assertSame([], $deleteAll['json']['meta'] ?? null, 'agent meta fully deleted');
 
         $missingAgain = $this->json('GET', '/me/meta', null, $this->token('a'));
-        $this->assertStatus($missingAgain, 404);
+        $this->assertStatus($missingAgain, 200);
+        $this->assertSame([], $missingAgain['json']['meta'] ?? null, 'agent meta stays empty after delete');
 
         $putMissing = $this->json('PUT', '/me/meta', [
             'meta' => ['title' => 'Nope'],
@@ -341,6 +342,24 @@ final class AcceptanceRunner
         $listRoutesSubset = $this->json('GET', '/routes?meta=title', null, $this->token('a'));
         $this->assertStatus($listRoutesSubset, 200);
         $this->assertSame(['title' => 'Main route'], $this->findRouteMetaInList($listRoutesSubset, $this->routeId('main')), 'route list returns selected meta only');
+
+        $bMeta = $this->json('POST', '/me/meta', [
+            'meta' => ['title' => 'Agent B', 'avatar' => 'b.png'],
+        ], $this->token('b'));
+        $this->assertStatus($bMeta, 200);
+
+        $viewSharedAgent = $this->json('GET', '/agents/' . $this->agentId('b') . '?meta=title', null, $this->token('a'));
+        $this->assertStatus($viewSharedAgent, 200);
+        $this->assertSame($this->agentId('b'), $viewSharedAgent['json']['agent']['agent_id'] ?? null, 'shared route agent visible');
+        $this->assertSame(['title' => 'Agent B'], $viewSharedAgent['json']['agent']['meta'] ?? null, 'agent selector returns requested meta');
+
+        $viewNonSharedAgent = $this->json('GET', '/agents/' . $this->agentId('c'), null, $this->token('a'));
+        $this->assertStatus($viewNonSharedAgent, 404);
+        $this->assertSame('Agent not found', $viewNonSharedAgent['json']['error'] ?? null, 'non-shared same-zone agent hidden');
+
+        $viewCrossZoneAgent = $this->json('GET', '/agents/' . $this->agentId('z2user'), null, $this->token('a'));
+        $this->assertStatus($viewCrossZoneAgent, 404);
+        $this->assertSame('Agent not found', $viewCrossZoneAgent['json']['error'] ?? null, 'cross-zone agent hidden');
 
         $subsInitial = $this->json('GET', '/routes/' . $this->routeId('main') . '/subscriptions', null, $this->token('a'));
         $this->assertStatus($subsInitial, 200);
@@ -416,8 +435,8 @@ final class AcceptanceRunner
         $this->step('Route meta');
 
         $missing = $this->json('GET', '/routes/' . $this->routeId('system') . '/meta', null, $this->token('sys1'));
-        $this->assertStatus($missing, 404);
-        $this->assertSame('Route meta not found', $missing['json']['error'] ?? null, 'route meta initially missing');
+        $this->assertStatus($missing, 200);
+        $this->assertSame([], $missing['json']['meta'] ?? null, 'route meta initially empty');
 
         $publisherDenied = $this->json('POST', '/routes/' . $this->routeId('main') . '/meta', [
             'meta' => ['title' => 'blocked'],
@@ -486,8 +505,8 @@ final class AcceptanceRunner
         $this->assertSame('Default lane cannot be deleted', $deleteDefault['json']['error'] ?? null, 'default lane is protected');
 
         $missingMeta = $this->json('GET', '/lanes/' . $this->laneId('extra') . '/meta', null, $this->token('a'));
-        $this->assertStatus($missingMeta, 404);
-        $this->assertSame('Lane meta not found', $missingMeta['json']['error'] ?? null, 'lane meta initially missing');
+        $this->assertStatus($missingMeta, 200);
+        $this->assertSame([], $missingMeta['json']['meta'] ?? null, 'lane meta initially empty');
 
         $publisherMetaDenied = $this->json('POST', '/lanes/' . $this->laneId('extra') . '/meta', [
             'meta' => ['title' => 'blocked'],

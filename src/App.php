@@ -53,6 +53,11 @@ final class App
                 return;
             }
 
+            if (preg_match('#^/agents/([^/]+)$#', $path, $matches) === 1 && $method === 'GET') {
+                $this->respond($this->viewAgentById($actor, rawurldecode($matches[1])));
+                return;
+            }
+
             if ($method === 'GET' && $path === '/me/meta') {
                 $this->respond($this->viewAgentMeta($actor));
                 return;
@@ -478,11 +483,20 @@ final class App
     private function viewAgentMeta(Agent $actor): array
     {
         $meta = $this->loadAgentMetaData($actor);
-        $this->assertMetaExists($meta, 'Agent meta not found');
 
         return [
             'ok' => true,
             'meta' => $this->selectMetaFields($meta, $this->readMetaSelector(true)),
+        ];
+    }
+
+    private function viewAgentById(Agent $actor, string $targetPublicId): array
+    {
+        $target = $this->loadVisibleAgentById($actor, $targetPublicId);
+
+        return [
+            'ok' => true,
+            'agent' => $this->serializeAgent($target, $this->readMetaSelector()),
         ];
     }
 
@@ -631,7 +645,6 @@ final class App
     {
         $route = $this->loadRouteForMember($actor, $routePublicId);
         $meta = $this->loadRouteMetaData($route);
-        $this->assertMetaExists($meta, 'Route meta not found');
 
         return [
             'ok' => true,
@@ -894,7 +907,6 @@ final class App
     {
         $lane = $this->loadLaneForMember($actor, $lanePublicId);
         $meta = $this->loadLaneMetaData($lane);
-        $this->assertMetaExists($meta, 'Lane meta not found');
 
         return [
             'ok' => true,
@@ -1510,6 +1522,29 @@ final class App
     {
         $target = new Agent(['id' => $this->requiredPositiveIntString($actorId, 'agent_id')]);
         if ((string) $target->zone !== (string) $requestActor->zone) {
+            $this->error(404, 'Agent not found');
+        }
+
+        return $target;
+    }
+
+    private function loadVisibleAgentById(Agent $requestActor, string $actorId): Agent
+    {
+        $target = $this->loadAgentByIdInZone($requestActor, $actorId);
+        if ((int) $target->id === (int) $requestActor->id) {
+            return $target;
+        }
+
+        $sharedRouteId = $this->dbValue(
+            'SELECT s1.route_id FROM [Subscription] s1
+                INNER JOIN [Subscription] s2 ON s2.route_id = s1.route_id
+                INNER JOIN [Route] r ON r.id = s1.route_id
+                WHERE s1.agent_id = ? AND s2.agent_id = ? AND r.is_deleted = 0
+                LIMIT 1',
+            [(int) $requestActor->id, (int) $target->id]
+        );
+
+        if (count($sharedRouteId->asArray()) === 0) {
             $this->error(404, 'Agent not found');
         }
 
