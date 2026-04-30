@@ -26,6 +26,13 @@
 4. Выполнить `php bin/init-schema.php`.
 5. Запустить `php -S 127.0.0.1:8080 index.php`.
 
+## Production
+
+Для production рекомендуется `nginx + php-fpm`, а не `php -S`.
+
+Example nginx site config:
+- [etc/nginx.conf.example](/home/web/Документы/cakk-transport/etc/nginx.conf.example)
+
 ## Acceptance
 
 Полный приёмочный прогон:

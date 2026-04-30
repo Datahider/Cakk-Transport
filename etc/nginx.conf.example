@@ -1,0 +1,53 @@
+server {
+    listen 80;
+    server_name transport.example.com;
+
+    root /srv/cakk-transport;
+    index index.php;
+
+    client_max_body_size 64m;
+
+    # The project has no dedicated public/ directory, so route all requests
+    # through the front controller and do not expose project files directly.
+    location / {
+        include fastcgi_params;
+        fastcgi_param SCRIPT_FILENAME $document_root/index.php;
+        fastcgi_param SCRIPT_NAME /index.php;
+        fastcgi_pass unix:/run/php/php8.3-fpm.sock;
+        fastcgi_read_timeout 60s;
+        fastcgi_buffering off;
+    }
+
+    location = /index.php {
+        include fastcgi_params;
+        fastcgi_param SCRIPT_FILENAME $document_root/index.php;
+        fastcgi_param SCRIPT_NAME /index.php;
+        fastcgi_pass unix:/run/php/php8.3-fpm.sock;
+        fastcgi_read_timeout 60s;
+        fastcgi_buffering off;
+    }
+
+    location ~ \.php$ {
+        return 404;
+    }
+
+    location ~ /\.(?!well-known) {
+        deny all;
+    }
+
+    location ^~ /bin/ {
+        deny all;
+    }
+
+    location ^~ /etc/ {
+        deny all;
+    }
+
+    location ^~ /src/ {
+        deny all;
+    }
+
+    location ^~ /vendor/ {
+        deny all;
+    }
+}
