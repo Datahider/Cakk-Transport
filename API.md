@@ -441,14 +441,14 @@ Rule:
 
 ## Updates
 
-### `GET /updates?after_id=0&limit=100&timeout_ms=0`
+### `GET /updates?after_id=0&limit=100&timeout=0`
 
 Current implementation:
 - доступен только `system`-агенту зоны, то есть zone owner / bootstrap agent
 - возвращает zone-wide durable updates
-- `timeout_ms=0` means immediate response
-- `timeout_ms>0` enables long-poll: сервер ждёт новые updates до заданного таймаута и возвращает сразу после появления данных или истечения дедлайна
-- `timeout_ms` must be a non-negative integer and is clamped to server-side maximum
+- `timeout=0` means immediate response
+- `timeout>0` enables long-poll: сервер ждёт новые updates до заданного таймаута и возвращает сразу после появления данных или истечения дедлайна
+- `timeout` is in whole seconds, must be a non-negative integer and is clamped to server-side maximum
 
 Response:
 ```json

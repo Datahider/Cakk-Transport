@@ -471,13 +471,13 @@ final class App
 
         $afterId = max(0, (int) ($_GET['after_id'] ?? 0));
         $limit = max(1, min(500, (int) ($_GET['limit'] ?? 100)));
-        $timeoutMs = $this->readNonNegativeIntQuery('timeout_ms', 0, 30000);
+        $timeoutSeconds = $this->readNonNegativeIntQuery('timeout', 0, 30);
 
         $items = [];
-        $deadlineAt = microtime(true) + ($timeoutMs / 1000);
+        $deadlineAt = microtime(true) + $timeoutSeconds;
         do {
             $items = $this->loadUpdateBatch((string) $actor->zone, $afterId, $limit + 1);
-            if ($items !== [] || $timeoutMs === 0 || microtime(true) >= $deadlineAt) {
+            if ($items !== [] || $timeoutSeconds === 0 || microtime(true) >= $deadlineAt) {
                 break;
             }
 
