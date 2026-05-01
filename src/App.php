@@ -33,6 +33,11 @@ final class App
                 return;
             }
 
+            if ($method === 'GET' && $path === '/docs') {
+                $this->respondMarkdown($this->readApiDocs());
+                return;
+            }
+
             if ($method === 'POST' && $path === '/register') {
                 $this->respond($this->register());
                 return;
@@ -3405,11 +3410,29 @@ final class App
         return new DateTimeImmutable();
     }
 
+    private function readApiDocs(): string
+    {
+        $path = dirname(__DIR__) . '/API.md';
+        $contents = @file_get_contents($path);
+        if (!is_string($contents)) {
+            $this->error(500, 'Failed to read API.md');
+        }
+
+        return $contents;
+    }
+
     private function respond(array $payload, int $statusCode = 200): void
     {
         http_response_code($statusCode);
         header('Content-Type: application/json; charset=utf-8');
         echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+
+    private function respondMarkdown(string $payload, int $statusCode = 200): void
+    {
+        http_response_code($statusCode);
+        header('Content-Type: text/markdown; charset=utf-8');
+        echo $payload;
     }
 
     private function respondBinary(Payload $payload, int $statusCode = 200): void

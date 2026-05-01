@@ -29,6 +29,7 @@
 
 Публичные endpoint’ы:
 - `GET /health`
+- `GET /docs`
 - `POST /register`
 - `POST /login`
 
@@ -39,6 +40,12 @@ Session token:
 - выдаётся при `register` и `login`
 - живёт `180 days`
 - продлевается на каждый запрос с валидным bearer session token
+
+## Docs
+
+- `GET /docs`
+- Публичный endpoint
+- Возвращает текущее содержимое `API.md` как `text/markdown; charset=utf-8`
 
 ## Core objects
 

@@ -85,6 +85,11 @@ final class AcceptanceRunner
         $this->assertStatus($response, 200);
         $this->assertTrue(($response['json']['ok'] ?? false) === true, 'health ok');
 
+        $docs = $this->raw('GET', '/docs');
+        $this->assertStatus($docs, 200);
+        $this->assertTrue($this->responseHeaderContains($docs, 'Content-Type:', 'text/markdown; charset=utf-8'), 'docs content type');
+        $this->assertTrue(str_contains($docs['body'], '# cakk-transport API'), 'docs body title');
+
         $unauthorized = $this->json('GET', '/me');
         $this->assertStatus($unauthorized, 401);
         $this->assertSame('Bearer token required', $unauthorized['json']['error'] ?? null, 'missing bearer');
@@ -1686,6 +1691,22 @@ final class AcceptanceRunner
         }
 
         return (int) $matches[1];
+    }
+
+    /**
+     * @param array{headers:array<int,string>} $response
+     */
+    private function responseHeaderContains(array $response, string $headerName, string $needle): bool
+    {
+        foreach ($response['headers'] as $header) {
+            if (stripos($header, $headerName) !== 0) {
+                continue;
+            }
+
+            return str_contains($header, $needle);
+        }
+
+        return false;
     }
 
     private function step(string $title): void
