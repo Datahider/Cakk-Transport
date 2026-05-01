@@ -738,6 +738,7 @@ final class App
             $route->zone = (string) $actor->zone;
             $route->owner_agent_id = (int) $actor->id;
             $route->default_role = $defaultRole;
+            $route->last_payload_id = null;
             $route->is_deleted = false;
             $transaction->write(TransportTransaction::OBJECT_ROUTE, $route);
 
@@ -1283,6 +1284,8 @@ final class App
             $lane->payload_count = 0;
             $lane->last_payload_id = null;
             $transaction->write(TransportTransaction::OBJECT_LANE, $lane);
+            $route->last_payload_id = $this->lastActivePayloadIdForRoute((int) $route->id);
+            $transaction->write(TransportTransaction::OBJECT_ROUTE, $route);
             $transaction->updateLog('lane_cleared', [
                 TransportTransaction::OBJECT_LANE,
                 TransportTransaction::OBJECT_PAYLOAD,
@@ -1363,6 +1366,8 @@ final class App
         try {
             $lane->is_deleted = true;
             $transaction->write(TransportTransaction::OBJECT_LANE, $lane);
+            $route->last_payload_id = $this->lastActivePayloadIdForRoute((int) $route->id);
+            $transaction->write(TransportTransaction::OBJECT_ROUTE, $route);
             $transaction->updateLog('lane_deleted', [
                 TransportTransaction::OBJECT_LANE,
                 TransportTransaction::OBJECT_ROUTE,
@@ -1432,6 +1437,8 @@ final class App
             $lane->payload_count = (int) $lane->payload_count + 1;
             $lane->last_payload_id = (int) $payload->id;
             $transaction->write(TransportTransaction::OBJECT_LANE, $lane);
+            $route->last_payload_id = (int) $payload->id;
+            $transaction->write(TransportTransaction::OBJECT_ROUTE, $route);
             $transaction->updateLog('payload_created', [
                 TransportTransaction::OBJECT_PAYLOAD,
                 TransportTransaction::OBJECT_LANE,
@@ -1477,6 +1484,8 @@ final class App
                 $lane->last_payload_id = $this->lastActivePayloadIdForLane((int) $lane->id);
             }
             $transaction->write(TransportTransaction::OBJECT_LANE, $lane);
+            $route->last_payload_id = $this->lastActivePayloadIdForRoute((int) $route->id);
+            $transaction->write(TransportTransaction::OBJECT_ROUTE, $route);
             $transaction->updateLog('payload_deleted', [
                 TransportTransaction::OBJECT_PAYLOAD,
                 TransportTransaction::OBJECT_LANE,
@@ -2367,6 +2376,7 @@ final class App
             'owner_agent_id' => (int) $route->owner_agent_id,
             'default_role' => (string) $route->default_role,
             'default_lane_id' => $defaultLane !== null ? (int) $defaultLane->id : null,
+            'last_payload_id' => $route->last_payload_id !== null ? (int) $route->last_payload_id : null,
             'created_at' => $this->formatDateTime($route->created_at),
             'updated_at' => $this->formatDateTime($route->updated_at),
             'revision' => $this->formatDateTime($route->revision),
@@ -2468,6 +2478,19 @@ final class App
         $lastPayloadId = $this->dbValue(
             'SELECT MAX(id) AS payload_id FROM [Payload] WHERE lane_id = ? AND is_deleted = 0',
             [$laneId]
+        );
+
+        return $lastPayloadId->payload_id !== null ? (int) $lastPayloadId->payload_id : null;
+    }
+
+    private function lastActivePayloadIdForRoute(int $routeId): ?int
+    {
+        $lastPayloadId = $this->dbValue(
+            'SELECT MAX(p.id) AS payload_id
+                FROM [Payload] p
+                INNER JOIN [Lane] l ON l.id = p.lane_id
+                WHERE l.route_id = ? AND l.is_deleted = 0 AND p.is_deleted = 0',
+            [$routeId]
         );
 
         return $lastPayloadId->payload_id !== null ? (int) $lastPayloadId->payload_id : null;

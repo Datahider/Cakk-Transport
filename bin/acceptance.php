@@ -426,6 +426,7 @@ final class AcceptanceRunner
         $viewRoute = $this->json('GET', '/routes/' . $this->routeId('main'), null, $this->token('a'));
         $this->assertStatus($viewRoute, 200);
         $this->assertSame($this->routeId('main'), $viewRoute['json']['route']['route_id'] ?? null, 'view route works');
+        $this->assertSame(null, $viewRoute['json']['route']['last_payload_id'] ?? null, 'route starts without last payload');
 
         $systemViewRoute = $this->json('GET', '/routes/' . $this->routeId('main'), null, $this->token('sys1'));
         $this->assertStatus($systemViewRoute, 200);
@@ -838,6 +839,10 @@ final class AcceptanceRunner
         $this->assertStatus($payloadExtra, 200);
         $this->rememberPayload('extra1', $payloadExtra);
 
+        $routeAfterPayloads = $this->json('GET', '/routes/' . $this->routeId('main'), null, $this->token('a'));
+        $this->assertStatus($routeAfterPayloads, 200);
+        $this->assertSame($this->payloadId('extra1'), $routeAfterPayloads['json']['route']['last_payload_id'] ?? null, 'route last payload tracks max payload id');
+
         $listAfter = $this->json('GET', '/lanes/' . $defaultLaneId . '/payloads?after_id=0&limit=10', null, $this->token('a'));
         $this->assertStatus($listAfter, 200);
         $this->assertTrue(count($listAfter['json']['items'] ?? []) === 2, 'payload list populated');
@@ -928,6 +933,10 @@ final class AcceptanceRunner
 
         $ownerDeleteOwn = $this->json('DELETE', '/payloads/' . $this->payloadId('a1'), null, $this->token('a'));
         $this->assertStatus($ownerDeleteOwn, 200);
+
+        $routeAfterPayloadDelete = $this->json('GET', '/routes/' . $this->routeId('main'), null, $this->token('a'));
+        $this->assertStatus($routeAfterPayloadDelete, 200);
+        $this->assertSame($this->payloadId('extra1'), $routeAfterPayloadDelete['json']['route']['last_payload_id'] ?? null, 'route last payload survives unrelated payload delete');
 
         $deletedBody = $this->raw('GET', '/payloads/' . $this->payloadId('a1') . '/body', null, $this->token('a'));
         $this->assertStatus($deletedBody, 404);
@@ -1221,6 +1230,10 @@ final class AcceptanceRunner
         $clearLane = $this->json('POST', '/lanes/' . $this->laneId('extra') . '/clear', [], $this->token('a'));
         $this->assertStatus($clearLane, 200);
 
+        $routeAfterClear = $this->json('GET', '/routes/' . $this->routeId('main'), null, $this->token('a'));
+        $this->assertStatus($routeAfterClear, 200);
+        $this->assertSame(null, $routeAfterClear['json']['route']['last_payload_id'] ?? null, 'route last payload cleared when last active lane payloads are cleared');
+
         $payloadsAfterClear = $this->json('POST', '/sync/lanes/' . $this->laneId('extra') . '/payloads', [
             'skip' => 0,
             'limit' => 100,
@@ -1236,6 +1249,10 @@ final class AcceptanceRunner
 
         $deleteLane = $this->json('DELETE', '/lanes/' . $this->laneId('extra'), null, $this->token('a'));
         $this->assertStatus($deleteLane, 200);
+
+        $routeAfterLaneDelete = $this->json('GET', '/routes/' . $this->routeId('main'), null, $this->token('a'));
+        $this->assertStatus($routeAfterLaneDelete, 200);
+        $this->assertSame(null, $routeAfterLaneDelete['json']['route']['last_payload_id'] ?? null, 'route last payload ignores deleted lane');
 
         $lanesAfterDelete = $this->json('POST', '/sync/routes/' . $this->routeId('main') . '/lanes', [
             'skip' => 0,

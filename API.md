@@ -14,6 +14,7 @@
   - error: `{"ok":false,"error":"..."}`
 - Исключение: `GET /payloads/{payload_id}/body` возвращает `application/octet-stream`
 - Времена сериализуются как строки формата `Y-m-d H:i:s.u`
+- `route.last_payload_id` это максимальный `payload_id` среди всех не удалённых payload в не удалённых lane этого route
 
 ## End-state goals
 
@@ -73,6 +74,7 @@ Session token:
 - `zone: string`
 - `owner_agent_id: int`
 - `default_lane_id: ?int`
+- `last_payload_id: ?int`
 - `created_at: string`
 - `updated_at: string`
 - `revision: string`
