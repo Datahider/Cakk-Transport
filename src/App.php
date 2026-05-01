@@ -568,7 +568,7 @@ final class App
 
     private function viewAgentMeta(Agent $actor): array
     {
-        $meta = $this->loadAgentMetaData($actor);
+        $meta = $this->loadAgentMetaData($actor, true);
 
         return [
             'ok' => true,
@@ -579,7 +579,7 @@ final class App
     private function viewForeignAgentMeta(Agent $actor, string $targetPublicId): array
     {
         $target = $this->loadForeignAgentForSystemMeta($actor, $targetPublicId);
-        $meta = $this->loadAgentMetaData($target);
+        $meta = $this->loadAgentMetaData($target, true);
 
         return [
             'ok' => true,
@@ -590,101 +590,108 @@ final class App
     private function viewAgentById(Agent $actor, string $targetPublicId): array
     {
         $target = $this->loadVisibleAgentById($actor, $targetPublicId);
+        $includePrivateMeta = (bool) $actor->is_system || (int) $actor->id === (int) $target->id;
 
         return [
             'ok' => true,
-            'agent' => $this->serializeAgent($target, $this->readMetaSelector()),
+            'agent' => $this->serializeAgent($target, $this->readMetaSelector(), $includePrivateMeta),
         ];
     }
 
     private function createAgentMeta(Agent $actor): array
     {
-        $existing = $this->loadAgentMetaData($actor);
+        $existing = $this->loadAgentMetaState($actor);
         if ($existing !== []) {
             $this->error(409, 'Agent meta already exists');
         }
 
-        $meta = $this->readRequiredMetaFromRequest();
-        $this->writeAgentMeta($actor, $meta, true);
+        ['meta' => $meta, 'privacy' => $privacy] = $this->readRequiredAgentMetaWriteRequest();
+        $state = $this->createAgentMetaState($meta, $privacy);
+        $this->writeAgentMetaStateForTarget($actor, $actor, $state, true);
 
-        return ['ok' => true, 'meta' => $this->metaResponseValue($meta)];
+        return ['ok' => true, 'meta' => $this->metaResponseValue($this->agentMetaDataFromState($state, true))];
     }
 
     private function createForeignAgentMeta(Agent $actor, string $targetPublicId): array
     {
         $target = $this->loadForeignAgentForSystemMeta($actor, $targetPublicId);
-        $existing = $this->loadAgentMetaData($target);
+        $existing = $this->loadAgentMetaState($target);
         if ($existing !== []) {
             $this->error(409, 'Agent meta already exists');
         }
 
-        $meta = $this->readRequiredMetaFromRequest();
-        $this->writeAgentMetaForTarget($actor, $target, $meta, true);
+        ['meta' => $meta, 'privacy' => $privacy] = $this->readRequiredAgentMetaWriteRequest();
+        $state = $this->createAgentMetaState($meta, $privacy);
+        $this->writeAgentMetaStateForTarget($actor, $target, $state, true);
 
-        return ['ok' => true, 'meta' => $this->metaResponseValue($meta)];
+        return ['ok' => true, 'meta' => $this->metaResponseValue($this->agentMetaDataFromState($state, true))];
     }
 
     private function replaceAgentMeta(Agent $actor): array
     {
-        $this->assertMetaExists($this->loadAgentMetaData($actor), 'Agent meta not found');
-        $meta = $this->readRequiredMetaFromRequest();
-        $this->writeAgentMeta($actor, $meta, true);
+        $existing = $this->loadAgentMetaState($actor);
+        $this->assertMetaExists($existing, 'Agent meta not found');
+        ['meta' => $meta, 'privacy' => $privacy] = $this->readRequiredAgentMetaWriteRequest();
+        $state = $this->replaceAgentMetaState($existing, $meta, $privacy);
+        $this->writeAgentMetaStateForTarget($actor, $actor, $state, true);
 
-        return ['ok' => true, 'meta' => $this->metaResponseValue($meta)];
+        return ['ok' => true, 'meta' => $this->metaResponseValue($this->agentMetaDataFromState($state, true))];
     }
 
     private function replaceForeignAgentMeta(Agent $actor, string $targetPublicId): array
     {
         $target = $this->loadForeignAgentForSystemMeta($actor, $targetPublicId);
-        $this->assertMetaExists($this->loadAgentMetaData($target), 'Agent meta not found');
-        $meta = $this->readRequiredMetaFromRequest();
-        $this->writeAgentMetaForTarget($actor, $target, $meta, true);
+        $existing = $this->loadAgentMetaState($target);
+        $this->assertMetaExists($existing, 'Agent meta not found');
+        ['meta' => $meta, 'privacy' => $privacy] = $this->readRequiredAgentMetaWriteRequest();
+        $state = $this->replaceAgentMetaState($existing, $meta, $privacy);
+        $this->writeAgentMetaStateForTarget($actor, $target, $state, true);
 
-        return ['ok' => true, 'meta' => $meta];
+        return ['ok' => true, 'meta' => $this->metaResponseValue($this->agentMetaDataFromState($state, true))];
     }
 
     private function patchAgentMeta(Agent $actor): array
     {
-        $meta = $this->readRequiredMetaFromRequest();
-        $existing = $this->loadAgentMetaData($actor);
-        $updated = array_replace($existing, $meta);
-        $this->writeAgentMeta($actor, $updated, false);
+        ['meta' => $meta, 'privacy' => $privacy] = $this->readRequiredAgentMetaWriteRequest();
+        $existing = $this->loadAgentMetaState($actor);
+        $state = $this->patchAgentMetaState($existing, $meta, $privacy);
+        $this->writeAgentMetaStateForTarget($actor, $actor, $state, false);
 
-        return ['ok' => true, 'meta' => $this->metaResponseValue($updated)];
+        return ['ok' => true, 'meta' => $this->metaResponseValue($this->agentMetaDataFromState($state, true))];
     }
 
     private function patchForeignAgentMeta(Agent $actor, string $targetPublicId): array
     {
         $target = $this->loadForeignAgentForSystemMeta($actor, $targetPublicId);
-        $meta = $this->readRequiredMetaFromRequest();
-        $existing = $this->loadAgentMetaData($target);
-        $updated = array_replace($existing, $meta);
-        $this->writeAgentMetaForTarget($actor, $target, $updated, false);
+        ['meta' => $meta, 'privacy' => $privacy] = $this->readRequiredAgentMetaWriteRequest();
+        $existing = $this->loadAgentMetaState($target);
+        $state = $this->patchAgentMetaState($existing, $meta, $privacy);
+        $this->writeAgentMetaStateForTarget($actor, $target, $state, false);
 
-        return ['ok' => true, 'meta' => $this->metaResponseValue($updated)];
+        return ['ok' => true, 'meta' => $this->metaResponseValue($this->agentMetaDataFromState($state, true))];
     }
 
     private function deleteAgentMeta(Agent $actor): array
     {
-        $existing = $this->loadAgentMetaData($actor);
+        $existing = $this->loadAgentMetaState($actor);
         $this->assertMetaExists($existing, 'Agent meta not found');
         $keys = $this->readMetaKeysSelector();
         $remaining = $keys === [] ? [] : array_diff_key($existing, array_flip($keys));
-        $this->writeAgentMeta($actor, $remaining, true);
+        $this->writeAgentMetaStateForTarget($actor, $actor, $remaining, true);
 
-        return ['ok' => true, 'meta' => $this->metaResponseValue($remaining)];
+        return ['ok' => true, 'meta' => $this->metaResponseValue($this->agentMetaDataFromState($remaining, true))];
     }
 
     private function deleteForeignAgentMeta(Agent $actor, string $targetPublicId): array
     {
         $target = $this->loadForeignAgentForSystemMeta($actor, $targetPublicId);
-        $existing = $this->loadAgentMetaData($target);
+        $existing = $this->loadAgentMetaState($target);
         $this->assertMetaExists($existing, 'Agent meta not found');
         $keys = $this->readMetaKeysSelector();
         $remaining = $keys === [] ? [] : array_diff_key($existing, array_flip($keys));
-        $this->writeAgentMetaForTarget($actor, $target, $remaining, true);
+        $this->writeAgentMetaStateForTarget($actor, $target, $remaining, true);
 
-        return ['ok' => true, 'meta' => $this->metaResponseValue($remaining)];
+        return ['ok' => true, 'meta' => $this->metaResponseValue($this->agentMetaDataFromState($remaining, true))];
     }
 
     private function createRoute(Agent $actor): array
@@ -2025,11 +2032,22 @@ final class App
         return $state instanceof LaneReadState ? $state : null;
     }
 
-    private function loadAgentMetaData(Agent $actor): array
+    private function loadAgentMetaData(Agent $actor, bool $includePrivate): array
+    {
+        return $this->agentMetaDataFromState($this->loadAgentMetaState($actor), $includePrivate);
+    }
+
+    /**
+     * @return array<string, array{value:string,is_private:bool}>
+     */
+    private function loadAgentMetaState(Agent $actor): array
     {
         $meta = [];
         foreach ($this->dbList(AgentMeta::class, ['agent_id' => (int) $actor->id])->asArray() as $record) {
-            $meta[(string) $record->meta_key] = (string) $record->meta_value;
+            $meta[(string) $record->meta_key] = [
+                'value' => (string) $record->meta_value,
+                'is_private' => $record->is_private !== null,
+            ];
         }
 
         return $meta;
@@ -2055,12 +2073,10 @@ final class App
         return $meta;
     }
 
-    private function writeAgentMeta(Agent $actor, array $meta, bool $replaceAll): void
-    {
-        $this->writeAgentMetaForTarget($actor, $actor, $meta, $replaceAll);
-    }
-
-    private function writeAgentMetaForTarget(Agent $actor, Agent $target, array $meta, bool $replaceAll): void
+    /**
+     * @param array<string, array{value:string,is_private:bool}> $state
+     */
+    private function writeAgentMetaStateForTarget(Agent $actor, Agent $target, array $state, bool $replaceAll): void
     {
         $now = $this->now();
         $transaction = $this->beginTransportMutation($actor, [
@@ -2068,12 +2084,34 @@ final class App
             TransportTransaction::OBJECT_AGENT,
         ]);
         try {
-            $this->syncMetaRecords($transaction, AgentMeta::class, ['agent_id' => (int) $target->id], 'meta_key', 'meta_value', $meta, $replaceAll, [
-                'agent_id' => (int) $target->id,
-                'created_at' => $now,
-                'updated_at' => $now,
-                'revision' => $now,
-            ]);
+            $records = $this->dbList(AgentMeta::class, ['agent_id' => (int) $target->id])->asArray();
+            $existing = [];
+            foreach ($records as $record) {
+                $existing[(string) $record->meta_key] = $record;
+            }
+
+            foreach ($state as $key => $entry) {
+                $isNew = !isset($existing[$key]);
+                $record = $existing[$key] ?? new AgentMeta();
+                $record->agent_id = (int) $target->id;
+                $record->meta_key = $key;
+                $record->meta_value = $entry['value'];
+                $record->is_private = $entry['is_private'] ? 1 : null;
+                if ($isNew) {
+                    $record->created_at = $now;
+                }
+                $record->updated_at = $now;
+                $record->revision = $now;
+                $transaction->write(TransportTransaction::OBJECT_AGENT_META, $record);
+                unset($existing[$key]);
+            }
+
+            if ($replaceAll) {
+                foreach ($existing as $record) {
+                    $transaction->delete(TransportTransaction::OBJECT_AGENT_META, $record);
+                }
+            }
+
             $transaction->updateLog('agent_meta_updated', [
                 TransportTransaction::OBJECT_AGENT_META,
                 TransportTransaction::OBJECT_AGENT,
@@ -2265,7 +2303,7 @@ final class App
         return $payloadMeta;
     }
 
-    private function serializeAgent(Agent $actor, ?array $metaSelector = null): array
+    private function serializeAgent(Agent $actor, ?array $metaSelector = null, bool $includePrivateMeta = true): array
     {
         $payload = [
             'agent_id' => (int) $actor->id,
@@ -2277,7 +2315,7 @@ final class App
         ];
 
         if ($metaSelector !== null) {
-            $payload['meta'] = $this->metaResponseValue($this->selectMetaFields($this->loadAgentMetaData($actor), $metaSelector));
+            $payload['meta'] = $this->metaResponseValue($this->selectMetaFields($this->loadAgentMetaData($actor, $includePrivateMeta), $metaSelector));
         }
 
         return $payload;
@@ -2554,6 +2592,23 @@ final class App
         return $this->extractMeta($payload);
     }
 
+    /**
+     * @return array{meta: array<string,string>, privacy: array<string,bool>}
+     */
+    private function readRequiredAgentMetaWriteRequest(): array
+    {
+        $payload = $this->readJsonBody();
+        $meta = $this->extractMeta($payload);
+        if ($meta === []) {
+            $this->error(422, 'meta is required');
+        }
+
+        return [
+            'meta' => $meta,
+            'privacy' => $this->extractAgentMetaPrivacy($payload, array_keys($meta)),
+        ];
+    }
+
     private function readRequiredMetaFromRequest(): array
     {
         $meta = $this->readMetaFromRequest();
@@ -2585,6 +2640,114 @@ final class App
         }
 
         return $normalized;
+    }
+
+    /**
+     * @param list<string> $allowedKeys
+     * @return array<string,bool>
+     */
+    private function extractAgentMetaPrivacy(array $payload, array $allowedKeys): array
+    {
+        $options = $payload['meta_options'] ?? [];
+        if ($options === []) {
+            return [];
+        }
+        if (!is_array($options)) {
+            $this->error(422, 'meta_options must be a JSON object');
+        }
+
+        $allowedMap = array_fill_keys($allowedKeys, true);
+        $privacy = [];
+        foreach ($options as $key => $option) {
+            if (!is_string($key) || !isset($allowedMap[$key])) {
+                $this->error(422, 'meta_options keys must match meta keys');
+            }
+            if (!is_array($option)) {
+                $this->error(422, 'meta_options entries must be JSON objects');
+            }
+            if (!array_key_exists('is_private', $option) || !is_bool($option['is_private'])) {
+                $this->error(422, 'meta_options.is_private must be boolean');
+            }
+            $privacy[$key] = (bool) $option['is_private'];
+        }
+
+        return $privacy;
+    }
+
+    /**
+     * @param array<string,bool> $privacy
+     * @return array<string, array{value:string,is_private:bool}>
+     */
+    private function createAgentMetaState(array $meta, array $privacy): array
+    {
+        $state = [];
+        foreach ($meta as $key => $value) {
+            $state[$key] = [
+                'value' => $value,
+                'is_private' => $privacy[$key] ?? false,
+            ];
+        }
+
+        return $state;
+    }
+
+    /**
+     * @param array<string, array{value:string,is_private:bool}> $existing
+     * @param array<string,string> $meta
+     * @param array<string,bool> $privacy
+     * @return array<string, array{value:string,is_private:bool}>
+     */
+    private function patchAgentMetaState(array $existing, array $meta, array $privacy): array
+    {
+        $state = $existing;
+        foreach ($meta as $key => $value) {
+            $state[$key] = [
+                'value' => $value,
+                'is_private' => $privacy[$key] ?? ($existing[$key]['is_private'] ?? false),
+            ];
+        }
+
+        return $state;
+    }
+
+    /**
+     * @param array<string, array{value:string,is_private:bool}> $existing
+     * @param array<string,string> $meta
+     * @param array<string,bool> $privacy
+     * @return array<string, array{value:string,is_private:bool}>
+     */
+    private function replaceAgentMetaState(array $existing, array $meta, array $privacy): array
+    {
+        $state = [];
+        foreach ($meta as $key => $value) {
+            if (($existing[$key]['is_private'] ?? false) && !array_key_exists($key, $privacy)) {
+                $this->error(422, sprintf('PUT requires explicit is_private for existing private key %s', $key));
+            }
+
+            $state[$key] = [
+                'value' => $value,
+                'is_private' => $privacy[$key] ?? false,
+            ];
+        }
+
+        return $state;
+    }
+
+    /**
+     * @param array<string, array{value:string,is_private:bool}> $state
+     * @return array<string,string>
+     */
+    private function agentMetaDataFromState(array $state, bool $includePrivate): array
+    {
+        $meta = [];
+        foreach ($state as $key => $entry) {
+            if (!$includePrivate && $entry['is_private']) {
+                continue;
+            }
+            $meta[$key] = $entry['value'];
+        }
+
+        return $meta;
     }
 
     private function encodeMeta(array $meta): ?string

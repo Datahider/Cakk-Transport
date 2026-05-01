@@ -225,6 +225,37 @@ Agent meta policy:
 - `/agents/{agent_id}/meta` is allowed only for `system`-agent of the same zone
 - ordinary agents cannot read or modify foreign agent meta through transport API
 
+Agent meta visibility:
+- agent meta keys may be `public` or `private`
+- by default, if no visibility is specified, a written key is `public`
+- current agent reading `/me` or `/me/meta` sees both public and private keys
+- `system` reading `/agents/{agent_id}` or `/agents/{agent_id}/meta` sees both public and private keys
+- any other agent reading `GET /agents/{agent_id}` sees public keys only
+
+Agent meta write extension:
+```json
+{
+  "meta": {
+    "title": "Alice",
+    "phone": "123456"
+  },
+  "meta_options": {
+    "phone": {
+      "is_private": true
+    }
+  }
+}
+```
+
+Agent meta visibility rules:
+- `meta_options[key].is_private=true` makes that key private
+- `meta_options[key].is_private=false` makes that key public
+- if a key is present in `meta` and absent in `meta_options`, then:
+  - `POST`: new key becomes public
+  - `PATCH`: existing key keeps its current visibility; new key becomes public
+  - `PUT`: existing public key stays public; existing private key causes `422`; new key becomes public
+- in `PUT`, replacing an existing private key requires explicit `meta_options[key].is_private=true|false`
+
 ## Route endpoints
 
 - `GET /routes`

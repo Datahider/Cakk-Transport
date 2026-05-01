@@ -11,6 +11,7 @@ final class AgentMeta extends UpdatableTransportDBObject
         'agent_id' => 'BIGINT UNSIGNED NOT NULL',
         'meta_key' => 'VARCHAR(191) NOT NULL',
         'meta_value' => 'LONGTEXT NOT NULL',
+        'is_private' => 'TINYINT(1) NULL',
         'created_at' => 'DATETIME(6) NOT NULL',
         'updated_at' => 'DATETIME(6) NOT NULL',
         'revision' => 'DATETIME(6) NOT NULL',

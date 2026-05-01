@@ -247,7 +247,8 @@ final class AcceptanceRunner
         $this->assertSame('meta keys must be non-empty strings', $badKey['json']['error'] ?? null, 'meta keys validation');
 
         $create = $this->json('POST', '/me/meta', [
-            'meta' => ['title' => 'Alice', 'avatar' => 'alice.png', 'note' => 'hello'],
+            'meta' => ['title' => 'Alice', 'avatar' => 'alice.png', 'note' => 'hello', 'phone' => '123456'],
+            'meta_options' => ['phone' => ['is_private' => true]],
         ], $this->token('a'));
         $this->assertStatus($create, 200);
         $this->assertSame('Alice', $create['json']['meta']['title'] ?? null, 'agent meta created');
@@ -262,17 +263,29 @@ final class AcceptanceRunner
         $this->assertStatus($subset, 200);
         $this->assertSame(['title' => 'Alice', 'avatar' => 'alice.png'], $subset['json']['agent']['meta'] ?? null, 'meta selector on me');
 
+        $selfAll = $this->json('GET', '/me?meta=all', null, $this->token('a'));
+        $this->assertStatus($selfAll, 200);
+        $this->assertSame('123456', $selfAll['json']['agent']['meta']['phone'] ?? null, 'self sees private agent meta');
+
         $replace = $this->json('PUT', '/me/meta', [
-            'meta' => ['title' => 'Alice 2', 'status' => 'online'],
+            'meta' => ['title' => 'Alice 2', 'status' => 'online', 'phone' => '123456'],
+            'meta_options' => ['phone' => ['is_private' => true]],
         ], $this->token('a'));
         $this->assertStatus($replace, 200);
-        $this->assertSame(['title' => 'Alice 2', 'status' => 'online'], $replace['json']['meta'] ?? null, 'agent meta replaced');
+        $this->assertSame(['title' => 'Alice 2', 'status' => 'online', 'phone' => '123456'], $replace['json']['meta'] ?? null, 'agent meta replaced');
 
         $patch = $this->json('PATCH', '/me/meta', [
-            'meta' => ['avatar' => 'alice-2.png'],
+            'meta' => ['avatar' => 'alice-2.png', 'phone' => '123999'],
         ], $this->token('a'));
         $this->assertStatus($patch, 200);
         $this->assertSame('alice-2.png', $patch['json']['meta']['avatar'] ?? null, 'agent meta patched');
+        $this->assertSame('123999', $patch['json']['meta']['phone'] ?? null, 'patch updates private key without changing visibility');
+
+        $putPrivateWithoutFlag = $this->json('PUT', '/me/meta', [
+            'meta' => ['title' => 'Alice 3', 'phone' => '777777'],
+        ], $this->token('a'));
+        $this->assertStatus($putPrivateWithoutFlag, 422);
+        $this->assertSame('PUT requires explicit is_private for existing private key phone', $putPrivateWithoutFlag['json']['error'] ?? null, 'put rejects silent replacement of private key');
 
         $deleteKeys = $this->json('DELETE', '/me/meta?keys=avatar', null, $this->token('a'));
         $this->assertStatus($deleteKeys, 200);
@@ -312,6 +325,7 @@ final class AcceptanceRunner
 
         $systemCreateForeignMeta = $this->json('POST', '/agents/' . $this->agentId('c') . '/meta', [
             'meta' => ['ops_note' => 'watch', 'priority' => 'high'],
+            'meta_options' => ['ops_note' => ['is_private' => true]],
         ], $this->token('sys1'));
         $this->assertStatus($systemCreateForeignMeta, 200);
         $this->assertSame('watch', $systemCreateForeignMeta['json']['meta']['ops_note'] ?? null, 'system can create foreign agent meta');
@@ -319,6 +333,10 @@ final class AcceptanceRunner
         $systemViewForeignMeta = $this->json('GET', '/agents/' . $this->agentId('c') . '/meta?meta=ops_note', null, $this->token('sys1'));
         $this->assertStatus($systemViewForeignMeta, 200);
         $this->assertSame(['ops_note' => 'watch'], $systemViewForeignMeta['json']['meta'] ?? null, 'system can select foreign agent meta');
+
+        $systemViewForeignAgentAll = $this->json('GET', '/agents/' . $this->agentId('c') . '?meta=all', null, $this->token('sys1'));
+        $this->assertStatus($systemViewForeignAgentAll, 200);
+        $this->assertSame('watch', $systemViewForeignAgentAll['json']['agent']['meta']['ops_note'] ?? null, 'system sees private foreign agent meta in agent payload');
 
         $systemPatchForeignMeta = $this->json('PATCH', '/agents/' . $this->agentId('c') . '/meta', [
             'meta' => ['priority' => 'urgent'],
@@ -438,7 +456,8 @@ final class AcceptanceRunner
         $this->assertTrue(count($subsInitial['json']['items'] ?? []) === 2, 'initial subscriptions include owner and publisher');
 
         $bMeta = $this->json('POST', '/me/meta', [
-            'meta' => ['title' => 'Agent B', 'avatar' => 'b.png'],
+            'meta' => ['title' => 'Agent B', 'avatar' => 'b.png', 'phone' => '555000'],
+            'meta_options' => ['phone' => ['is_private' => true]],
         ], $this->token('b'));
         $this->assertStatus($bMeta, 200);
 
@@ -446,6 +465,10 @@ final class AcceptanceRunner
         $this->assertStatus($viewSharedAgent, 200);
         $this->assertSame($this->agentId('b'), $viewSharedAgent['json']['agent']['agent_id'] ?? null, 'shared route agent visible');
         $this->assertSame(['title' => 'Agent B'], $viewSharedAgent['json']['agent']['meta'] ?? null, 'agent selector returns requested meta');
+
+        $viewSharedAgentAll = $this->json('GET', '/agents/' . $this->agentId('b') . '?meta=all', null, $this->token('a'));
+        $this->assertStatus($viewSharedAgentAll, 200);
+        $this->assertTrue(!array_key_exists('phone', $viewSharedAgentAll['json']['agent']['meta'] ?? []), 'other agent does not see private agent meta');
 
         $viewNonSharedAgent = $this->json('GET', '/agents/' . $this->agentId('c'), null, $this->token('a'));
         $this->assertStatus($viewNonSharedAgent, 404);
