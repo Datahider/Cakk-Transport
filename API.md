@@ -270,6 +270,7 @@ Agent meta visibility rules:
 Request:
 ```json
 {
+  "default_role": "publisher",
   "agent_ids": ["84", "96"],
   "meta": {
     "title": "Main route",
@@ -281,8 +282,11 @@ Request:
 Meaning:
 - creates a route in caller’s zone
 - creates creator subscription automatically
+- `default_role` is optional; if omitted it is `publisher`
+- `default_role` may be `guest`, `publisher`, `editor`, or `admin`
+- `default_role=owner` is not allowed
 - `agent_ids` may be used only by `system`-agent
-- if `agent_ids` is present, creates subscriptions for all listed agents
+- if `agent_ids` is present, creates subscriptions for all listed agents with `default_role`
 - creates one default lane automatically
 - if `meta` is present, creates initial route meta in the same DB transaction as route creation
 
@@ -336,6 +340,10 @@ Membership policy:
   "role": "publisher"
 }
 ```
+
+`POST /routes/{route_id}/subscriptions` role rules:
+- if `role` is omitted, server uses `route.default_role`
+- `owner` still cannot be assigned through this endpoint
 
 `DELETE /routes/{route_id}/subscriptions/{agent_id}`:
 - removes target subscription from route

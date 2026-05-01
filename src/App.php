@@ -698,6 +698,13 @@ final class App
     {
         $payload = $this->readJsonBody();
         $meta = $this->extractMeta($payload);
+        $defaultRole = (string) ($payload['default_role'] ?? Subscription::ROLE_PUBLISHER);
+        if (!in_array($defaultRole, $this->routeRoles(), true)) {
+            $this->error(422, 'Unsupported default_role');
+        }
+        if ($defaultRole === Subscription::ROLE_OWNER) {
+            $this->error(422, 'default_role cannot be owner');
+        }
         $subscriberIds = array_values(array_filter(
             is_array($payload['agent_ids'] ?? null) ? $payload['agent_ids'] : [],
             static fn (mixed $item): bool => is_string($item) && trim($item) !== ''
@@ -725,6 +732,7 @@ final class App
             $route = new Route();
             $route->zone = (string) $actor->zone;
             $route->owner_agent_id = (int) $actor->id;
+            $route->default_role = $defaultRole;
             $route->is_deleted = false;
             $transaction->write(TransportTransaction::OBJECT_ROUTE, $route);
 
@@ -739,7 +747,7 @@ final class App
                 $spaceSubscription = new Subscription();
                 $spaceSubscription->route_id = (int) $route->id;
                 $spaceSubscription->agent_id = (int) $subscriptionSubscriber->id;
-                $spaceSubscription->role = Subscription::ROLE_PUBLISHER;
+                $spaceSubscription->role = $defaultRole;
                 $transaction->write(TransportTransaction::OBJECT_SUBSCRIPTION, $spaceSubscription);
             }
 
@@ -959,7 +967,7 @@ final class App
             $this->error(409, 'Agent is already a member of this route');
         }
 
-        $role = (string) ($payload['role'] ?? Subscription::ROLE_PUBLISHER);
+        $role = (string) ($payload['role'] ?? $route->default_role);
         if (!in_array($role, $this->routeRoles(), true)) {
             $this->error(422, 'Unsupported route role');
         }
@@ -2352,6 +2360,7 @@ final class App
             'route_id' => (int) $route->id,
             'zone' => (string) $route->zone,
             'owner_agent_id' => (int) $route->owner_agent_id,
+            'default_role' => (string) $route->default_role,
             'default_lane_id' => $defaultLane !== null ? (int) $defaultLane->id : null,
             'created_at' => $this->formatDateTime($route->created_at),
             'updated_at' => $this->formatDateTime($route->updated_at),

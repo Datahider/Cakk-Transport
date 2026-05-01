@@ -387,6 +387,32 @@ final class AcceptanceRunner
         $this->assertStatus($systemRoute, 200);
         $this->rememberRoute('system', $systemRoute);
         $this->assertSame($this->agentId('sys1'), $systemRoute['json']['route']['owner_agent_id'] ?? null, 'system agent becomes route owner');
+        $this->assertSame('publisher', $systemRoute['json']['route']['default_role'] ?? null, 'route default_role defaults to publisher');
+
+        $badDefaultRole = $this->json('POST', '/routes', [
+            'default_role' => 'owner',
+        ], $this->token('sys1'));
+        $this->assertStatus($badDefaultRole, 422);
+        $this->assertSame('default_role cannot be owner', $badDefaultRole['json']['error'] ?? null, 'owner default_role rejected');
+
+        $guestRoute = $this->json('POST', '/routes', [
+            'default_role' => 'guest',
+            'agent_ids' => [(string) $this->agentId('f')],
+        ], $this->token('sys1'));
+        $this->assertStatus($guestRoute, 200);
+        $this->rememberRoute('guest_default', $guestRoute);
+        $this->assertSame('guest', $guestRoute['json']['route']['default_role'] ?? null, 'route stores guest default_role');
+
+        $guestRouteSubs = $this->json('GET', '/routes/' . $this->routeId('guest_default') . '/subscriptions', null, $this->token('sys1'));
+        $this->assertStatus($guestRouteSubs, 200);
+        $this->assertSame('guest', $this->findSubscriptionRole($guestRouteSubs, $this->agentId('f')), 'initial members use route default_role');
+
+        $adminRoute = $this->json('POST', '/routes', [
+            'default_role' => 'admin',
+        ], $this->token('sys1'));
+        $this->assertStatus($adminRoute, 200);
+        $this->rememberRoute('admin_default', $adminRoute);
+        $this->assertSame('admin', $adminRoute['json']['route']['default_role'] ?? null, 'route stores admin default_role');
 
         $routesAfterCreate = $this->json('GET', '/routes', null, $this->token('a'));
         $this->assertStatus($routesAfterCreate, 200);
@@ -537,6 +563,12 @@ final class AcceptanceRunner
             'role' => 'publisher',
         ], $this->token('sys1'));
         $this->assertStatus($systemAddsPublisher, 200);
+
+        $systemAddsAdminByDefault = $this->json('POST', '/routes/' . $this->routeId('admin_default') . '/subscriptions', [
+            'agent_id' => (string) $this->agentId('e'),
+        ], $this->token('sys1'));
+        $this->assertStatus($systemAddsAdminByDefault, 200);
+        $this->assertSame('admin', $systemAddsAdminByDefault['json']['subscription']['role'] ?? null, 'missing role uses route default_role');
 
         $ownerCannotDeleteMember = $this->json('DELETE', '/routes/' . $this->routeId('main') . '/subscriptions/' . $this->agentId('f'), null, $this->token('a'));
         $this->assertStatus($ownerCannotDeleteMember, 403);
@@ -1570,6 +1602,22 @@ final class AcceptanceRunner
 
             $meta = $item['meta'] ?? null;
             return is_array($meta) ? $meta : null;
+        }
+
+        return null;
+    }
+
+    /**
+     * @param array{json:array<string,mixed>} $response
+     */
+    private function findSubscriptionRole(array $response, int $agentId): ?string
+    {
+        foreach (($response['json']['items'] ?? []) as $item) {
+            if ((int) ($item['agent_id'] ?? 0) !== $agentId) {
+                continue;
+            }
+
+            return is_string($item['role'] ?? null) ? $item['role'] : null;
         }
 
         return null;
