@@ -430,9 +430,15 @@ Response:
 
 Headers:
 - `Content-Type: application/octet-stream`
+- optional `X-Payload-Meta: {"key":"value","...":"..."}` to create author-owned payload meta atomically with payload creation
 
 Body:
 - raw payload bytes
+
+Rules:
+- if `X-Payload-Meta` is present, it must be a JSON object with `string -> string` shape
+- payload and initial payload meta are created in one transaction
+- if `X-Payload-Meta` is invalid, neither payload nor payload meta is created
 
 Response:
 ```json

@@ -1417,13 +1417,19 @@ final class App
         $route = new Route(['id' => (int) $lane->route_id]);
         $this->assertCanCreatePayload($actor, $route);
         $binaryPayload = $this->readRawPayloadBody();
+        $initialMeta = $this->readOptionalInitialPayloadMeta();
 
         $now = $this->now();
-        $transaction = $this->beginTransportMutation($actor, [
+        $allowedKinds = [
             TransportTransaction::OBJECT_PAYLOAD,
             TransportTransaction::OBJECT_LANE,
             TransportTransaction::OBJECT_ROUTE,
-        ]);
+        ];
+        if ($initialMeta !== []) {
+            $allowedKinds[] = TransportTransaction::OBJECT_PAYLOAD_META;
+        }
+
+        $transaction = $this->beginTransportMutation($actor, $allowedKinds);
         try {
             $payload = new Payload();
             $payload->lane_id = (int) $lane->id;
@@ -1439,13 +1445,27 @@ final class App
             $transaction->write(TransportTransaction::OBJECT_LANE, $lane);
             $route->last_payload_id = (int) $payload->id;
             $transaction->write(TransportTransaction::OBJECT_ROUTE, $route);
-            $transaction->updateLog('payload_created', [
+            $coveredKinds = [
                 TransportTransaction::OBJECT_PAYLOAD,
                 TransportTransaction::OBJECT_LANE,
                 TransportTransaction::OBJECT_ROUTE,
-            ], [
+            ];
+            if ($initialMeta !== []) {
+                foreach ($initialMeta as $metaKey => $metaValue) {
+                    $payloadMeta = new PayloadMeta();
+                    $payloadMeta->payload_id = (int) $payload->id;
+                    $payloadMeta->agent_id = (int) $actor->id;
+                    $payloadMeta->meta_key = $metaKey;
+                    $payloadMeta->meta_value = $metaValue;
+                    $transaction->write(TransportTransaction::OBJECT_PAYLOAD_META, $payloadMeta);
+                }
+                $coveredKinds[] = TransportTransaction::OBJECT_PAYLOAD_META;
+            }
+
+            $transaction->updateLog('payload_created', $coveredKinds, [
                 'lane_id' => (int) $lane->id,
                 'payload_id' => (int) $payload->id,
+                'meta_keys' => array_keys($initialMeta),
             ], [
                 'route_id' => (int) $route->id,
                 'lane_id' => (int) $lane->id,
@@ -3102,6 +3122,25 @@ final class App
         $metaKey = (string) array_key_first($meta);
 
         return [$metaKey, (string) $meta[$metaKey]];
+    }
+
+    private function readOptionalInitialPayloadMeta(): array
+    {
+        $raw = $_SERVER['HTTP_X_PAYLOAD_META'] ?? null;
+        if ($raw === null || $raw === '') {
+            return [];
+        }
+
+        if (!is_string($raw)) {
+            $this->error(400, 'X-Payload-Meta must be a valid JSON object');
+        }
+
+        $decoded = json_decode($raw, true);
+        if (!is_array($decoded)) {
+            $this->error(400, 'X-Payload-Meta must be a valid JSON object');
+        }
+
+        return $this->extractMeta(['meta' => $decoded]);
     }
 
     private function serializeUpdate(UpdateLog $update): array

@@ -809,6 +809,19 @@ final class AcceptanceRunner
         $this->assertStatus($emptyBody, 422);
         $this->assertSame('Payload body is required', $emptyBody['json']['error'] ?? null, 'empty payload rejected');
 
+        $badInitialMeta = $this->raw(
+            'POST',
+            '/lanes/' . $defaultLaneId . '/payloads',
+            'bad payload meta',
+            $this->token('a'),
+            [
+                'Content-Type: application/octet-stream',
+                'X-Payload-Meta: not-json',
+            ]
+        );
+        $this->assertStatus($badInitialMeta, 400);
+        $this->assertSame('X-Payload-Meta must be a valid JSON object', $badInitialMeta['json']['error'] ?? null, 'payload create validates X-Payload-Meta');
+
         $payloadA = $this->raw(
             'POST',
             '/lanes/' . $defaultLaneId . '/payloads',
@@ -839,9 +852,28 @@ final class AcceptanceRunner
         $this->assertStatus($payloadExtra, 200);
         $this->rememberPayload('extra1', $payloadExtra);
 
+        $payloadWithMeta = $this->raw(
+            'POST',
+            '/lanes/' . $extraLaneId . '/payloads',
+            'hello from extra lane with meta',
+            $this->token('a'),
+            [
+                'Content-Type: application/octet-stream',
+                'X-Payload-Meta: {"title":"Atomic title","kind":"notice"}',
+            ]
+        );
+        $this->assertStatus($payloadWithMeta, 200);
+        $this->rememberPayload('extra_meta', $payloadWithMeta);
+
+        $payloadWithMetaList = $this->json('GET', '/payloads/' . $this->payloadId('extra_meta') . '/meta', null, $this->token('a'));
+        $this->assertStatus($payloadWithMetaList, 200);
+        $this->assertSame(2, count($payloadWithMetaList['json']['items'] ?? []), 'payload create with X-Payload-Meta creates two meta records');
+        $this->assertSame('Atomic title', $this->findPayloadMetaValue($payloadWithMetaList, 'title'), 'payload create with X-Payload-Meta stores title');
+        $this->assertSame('notice', $this->findPayloadMetaValue($payloadWithMetaList, 'kind'), 'payload create with X-Payload-Meta stores kind');
+
         $routeAfterPayloads = $this->json('GET', '/routes/' . $this->routeId('main'), null, $this->token('a'));
         $this->assertStatus($routeAfterPayloads, 200);
-        $this->assertSame($this->payloadId('extra1'), $routeAfterPayloads['json']['route']['last_payload_id'] ?? null, 'route last payload tracks max payload id');
+        $this->assertSame($this->payloadId('extra_meta'), $routeAfterPayloads['json']['route']['last_payload_id'] ?? null, 'route last payload tracks max payload id');
 
         $listAfter = $this->json('GET', '/lanes/' . $defaultLaneId . '/payloads?after_id=0&limit=10', null, $this->token('a'));
         $this->assertStatus($listAfter, 200);
@@ -936,7 +968,7 @@ final class AcceptanceRunner
 
         $routeAfterPayloadDelete = $this->json('GET', '/routes/' . $this->routeId('main'), null, $this->token('a'));
         $this->assertStatus($routeAfterPayloadDelete, 200);
-        $this->assertSame($this->payloadId('extra1'), $routeAfterPayloadDelete['json']['route']['last_payload_id'] ?? null, 'route last payload survives unrelated payload delete');
+        $this->assertSame($this->payloadId('extra_meta'), $routeAfterPayloadDelete['json']['route']['last_payload_id'] ?? null, 'route last payload survives unrelated payload delete');
 
         $deletedBody = $this->raw('GET', '/payloads/' . $this->payloadId('a1') . '/body', null, $this->token('a'));
         $this->assertStatus($deletedBody, 404);
@@ -1640,6 +1672,23 @@ final class AcceptanceRunner
             }
 
             return is_string($item['role'] ?? null) ? $item['role'] : null;
+        }
+
+        return null;
+    }
+
+    /**
+     * @param array{json:array<string,mixed>} $response
+     */
+    private function findPayloadMetaValue(array $response, string $key): ?string
+    {
+        foreach (($response['json']['items'] ?? []) as $item) {
+            $meta = $item['meta'] ?? null;
+            if (!is_array($meta) || !array_key_exists($key, $meta)) {
+                continue;
+            }
+
+            return is_string($meta[$key]) ? $meta[$key] : null;
         }
 
         return null;
